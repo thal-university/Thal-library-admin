@@ -181,13 +181,23 @@ export default function ReservationsPage() {
         }
       }
 
-      // Delete the reservation
-      const { error: deleteError } = await supabase
-        .from('reservations')
-        .delete()
-        .eq('id', reservation.id)
+      // If it was confirmed, mark as deleted (archive) so it appears in Completed Reservations
+      if (reservation.status === 'confirmed') {
+        const { error: deleteError } = await supabase
+          .from('reservations')
+          .update({ status: 'deleted', updated_at: new Date().toISOString() })
+          .eq('id', reservation.id)
 
-      if (deleteError) throw deleteError
+        if (deleteError) throw deleteError
+      } else {
+        // For pending or other statuses, delete as before
+        const { error: deleteError } = await supabase
+          .from('reservations')
+          .delete()
+          .eq('id', reservation.id)
+
+        if (deleteError) throw deleteError
+      }
 
       toast.success('Reservation deleted successfully! Book status updated to Available.')
       setShowDeleteModal(false)
@@ -248,6 +258,8 @@ export default function ReservationsPage() {
   // Filter and search reservations
   const filteredReservations = reservations
     .filter(reservation => {
+      // Exclude archived (deleted) reservations from the main reservations view
+      if (reservation.status === 'deleted') return false
       // Status filter
       if (filterStatus !== 'all' && reservation.status !== filterStatus) return false
 
@@ -270,7 +282,7 @@ export default function ReservationsPage() {
 
   // Calculate stats
   const stats = {
-    total: reservations.length,
+    total: reservations.filter(r => r.status !== 'deleted').length,
     pending: reservations.filter(r => r.status === 'pending').length,
     confirmed: reservations.filter(r => r.status === 'confirmed').length,
     students: reservations.filter(r => r.reserver_role === 'student').length,

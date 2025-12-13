@@ -26,6 +26,7 @@ export default function Sidebar() {
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
     { name: "Books", href: "/dashboard/books", icon: Library },
     { name: "Reservations", href: "/dashboard/reservations", icon: BookMarked },
+    { name: "Completed", href: "/dashboard/completed-reservations", icon: BookMarked },
     // { name: 'Settings', href: '/dashboard/settings', icon: Settings },
   ];
 
