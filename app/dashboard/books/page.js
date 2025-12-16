@@ -468,7 +468,8 @@ export default function BooksPage() {
         (book.name || '').toLowerCase().includes(query) ||
         (book.author || '').toLowerCase().includes(query) ||
         (book.department || '').toLowerCase().includes(query) ||
-        (book.status || '').toLowerCase().includes(query)
+        (book.status || '').toLowerCase().includes(query) ||
+        (book.sr_no || '').toString().toLowerCase().includes(query)
       )
     })
     .sort((a, b) => {
