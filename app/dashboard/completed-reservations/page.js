@@ -2,9 +2,15 @@
 import { useEffect, useState } from 'react'
 import Header from '@/components/Header'
 import Loader from '@/components/Loader'
-import { supabase } from '@/lib/supabase'
 import { BookMarked, Search, X, CheckCircle, Trash2, Filter } from 'lucide-react'
 import toast, { Toaster } from 'react-hot-toast'
+import {
+  formatDate,
+  formatMoney,
+  DEFAULT_SETTINGS,
+  getLibrarySettings,
+  fetchReservationsList
+} from '@/lib/librarySettings'
 
 export default function CompletedReservationsPage() {
   const [loading, setLoading] = useState(true)
@@ -13,72 +19,41 @@ export default function CompletedReservationsPage() {
   const [filterType, setFilterType] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [showFilters, setShowFilters] = useState(false)
+  const [settings, setSettings] = useState(DEFAULT_SETTINGS)
   const [stats, setStats] = useState({
     total: 0,
     completed: 0,
-    deleted: 0
+    deleted: 0,
+    fines: 0
   })
 
   useEffect(() => {
     fetchReservations()
+    getLibrarySettings().then(setSettings)
 
-    const channel = supabase
-      .channel('reservations-changes-completed')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'reservations' }, (payload) => {
-        fetchReservations()
-      })
-      .subscribe()
+    // Polled rather than subscribed: Supabase realtime honours row level
+    // security, which hides `reservations` from the anon key.
+    const refreshInterval = setInterval(fetchReservations, 10000)
 
-    const refreshInterval = setInterval(() => fetchReservations(), 10000)
-
-    return () => {
-      supabase.removeChannel(channel)
-      clearInterval(refreshInterval)
-    }
+    return () => clearInterval(refreshInterval)
   }, [])
 
   async function fetchReservations() {
     try {
-      // Fetch both completed and deleted reservations without foreign key join
-      const { data: reservationsData, error } = await supabase
-        .from('reservations')
-        .select('*')
-        .in('status', ['completed', 'deleted'])
-        .order('updated_at', { ascending: false })
-
-      if (error) throw error
-
-      // Get unique book_sr_no values to fetch book details
-      const bookSrNos = [...new Set(reservationsData?.map(r => r.book_sr_no).filter(Boolean))]
-
-      let booksMap = {}
-      if (bookSrNos.length > 0) {
-        const { data: booksData } = await supabase
-          .from('books')
-          .select('id, name, author, department, status, sr_no')
-          .in('sr_no', bookSrNos)
-
-        // Create a map of sr_no to book data
-        booksData?.forEach(book => {
-          booksMap[book.sr_no] = book
-        })
-      }
-
-      // Attach book data to reservations
-      const allReservations = reservationsData?.map(reservation => ({
-        ...reservation,
-        book: reservation.book_sr_no ? booksMap[reservation.book_sr_no] || null : null
-      })) || []
-
+      const allReservations = await fetchReservationsList('archived')
       setReservations(allReservations)
 
-      // Calculate stats
-      const completedCount = allReservations.filter(r => r.status === 'completed').length
+      const completedCount = allReservations.filter(
+        r => r.status === 'returned' || r.status === 'completed'
+      ).length
       const deletedCount = allReservations.filter(r => r.status === 'deleted').length
+      const finesTotal = allReservations.reduce((sum, r) => sum + Number(r.fine_amount || 0), 0)
+
       setStats({
         total: allReservations.length,
         completed: completedCount,
-        deleted: deletedCount
+        deleted: deletedCount,
+        fines: finesTotal
       })
     } catch (error) {
       console.error('Error fetching completed reservations:', error)
@@ -102,7 +77,11 @@ export default function CompletedReservationsPage() {
 
   const filteredReservations = reservations.filter(r => {
     if (filterRole !== 'all' && r.reserver_role !== filterRole) return false
-    if (filterType !== 'all' && r.status !== filterType) return false
+    if (filterType === 'completed') {
+      if (r.status !== 'returned' && r.status !== 'completed') return false
+    } else if (filterType !== 'all' && r.status !== filterType) {
+      return false
+    }
     if (searchQuery) {
       const q = searchQuery.toLowerCase()
       return (
@@ -122,7 +101,7 @@ export default function CompletedReservationsPage() {
 
       <div className="flex-1 overflow-y-auto p-2 sm:p-3 space-y-2">
         {/* Stats Cards - Compact for mobile */}
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           <div className="bg-white rounded-lg p-2 sm:p-3 border-2 border-[#fe9800] shadow-md">
             <div className="flex items-center justify-between">
               <div className="p-1.5 sm:p-2 rounded-lg bg-[#fe9800]">
@@ -155,6 +134,17 @@ export default function CompletedReservationsPage() {
               </div>
             </div>
             <p className="text-[10px] sm:text-xs font-bold text-[#002147] mt-1 uppercase">Deleted</p>
+          </div>
+          <div className="bg-white rounded-lg p-2 sm:p-3 border-2 border-red-500 shadow-md">
+            <div className="flex items-center justify-between">
+              <div className="p-1.5 sm:p-2 rounded-lg bg-red-500">
+                <BookMarked className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+              </div>
+              <div className="text-base sm:text-xl font-bold text-red-600">
+                {formatMoney(stats.fines, settings)}
+              </div>
+            </div>
+            <p className="text-[10px] sm:text-xs font-bold text-[#002147] mt-1 uppercase">Fines</p>
           </div>
         </div>
 
@@ -319,11 +309,11 @@ export default function CompletedReservationsPage() {
                 >
                   <div className="flex items-center gap-1.5 mb-0.5">
                     <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                      reservation.status === 'completed'
-                        ? 'bg-green-100 text-green-700'
-                        : 'bg-gray-100 text-gray-700'
+                      reservation.status === 'deleted'
+                        ? 'bg-gray-100 text-gray-700'
+                        : 'bg-green-100 text-green-700'
                     }`}>
-                      {reservation.status === 'completed' ? 'Done' : 'Del'}
+                      {reservation.status === 'deleted' ? 'Del' : 'Done'}
                     </span>
                     <span className={`text-[10px] px-1.5 py-0.5 rounded ${
                       reservation.reserver_role === 'teacher'
@@ -342,6 +332,22 @@ export default function CompletedReservationsPage() {
                     <p className="text-xs font-semibold text-[#002147] truncate flex-1">{reservation.book_name}</p>
                     <span className="text-[10px] text-gray-500">SR: {reservation.book?.sr_no || reservation.book_sr_no || 'N/A'}</span>
                   </div>
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-1">
+                    <span className="text-[10px] text-gray-600">
+                      <span className="font-semibold text-[#002147]">Issued:</span> {formatDate(reservation.issue_date)}
+                    </span>
+                    <span className="text-[10px] text-gray-600">
+                      <span className="font-semibold text-[#002147]">Due:</span> {formatDate(reservation.due_date)}
+                    </span>
+                    <span className="text-[10px] text-gray-600">
+                      <span className="font-semibold text-[#002147]">Returned:</span> {formatDate(reservation.return_date)}
+                    </span>
+                    {Number(reservation.fine_amount || 0) > 0 && (
+                      <span className="text-[10px] font-bold text-red-700 bg-red-50 px-1.5 py-0.5 rounded border border-red-200">
+                        Fine {formatMoney(reservation.fine_amount, settings)}
+                      </span>
+                    )}
+                  </div>
                 </div>
               ))
             )}
@@ -357,13 +363,17 @@ export default function CompletedReservationsPage() {
                   <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Book Details</th>
                   <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Department</th>
                   <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Status</th>
+                  <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Issue Date</th>
+                  <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Due Date</th>
+                  <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Returned</th>
+                  <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Fine</th>
                   <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Updated At</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {filteredReservations.length === 0 ? (
                   <tr>
-                    <td colSpan="6" className="px-4 py-12 text-center text-gray-500">
+                    <td colSpan="10" className="px-4 py-12 text-center text-gray-500">
                       <BookMarked className="w-12 h-12 mx-auto mb-3 text-gray-400" />
                       <p className="font-medium">No completed reservations found</p>
                       <p className="text-sm">Try adjusting your filters or search query</p>
@@ -437,7 +447,7 @@ export default function CompletedReservationsPage() {
                       </td>
                       <td className="px-3 py-2">
                         <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold ${
-                          reservation.status === 'completed'
+                          reservation.status === 'returned' || reservation.status === 'completed'
                             ? 'bg-green-100 text-green-700 border border-green-300'
                             : reservation.status === 'deleted'
                             ? 'bg-gray-100 text-gray-700 border border-gray-300'
@@ -445,6 +455,28 @@ export default function CompletedReservationsPage() {
                         }`}>
                           {reservation.status.charAt(0).toUpperCase() + reservation.status.slice(1)}
                         </span>
+                      </td>
+                      <td className="px-3 py-2">
+                        <span className="text-[10px] text-gray-600 whitespace-nowrap">{formatDate(reservation.issue_date)}</span>
+                      </td>
+                      <td className="px-3 py-2">
+                        <span className="text-[10px] text-gray-600 whitespace-nowrap">{formatDate(reservation.due_date)}</span>
+                      </td>
+                      <td className="px-3 py-2">
+                        <span className="text-[10px] text-gray-600 whitespace-nowrap">{formatDate(reservation.return_date)}</span>
+                      </td>
+                      <td className="px-3 py-2">
+                        {Number(reservation.fine_amount || 0) > 0 ? (
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border whitespace-nowrap ${
+                            reservation.fine_paid
+                              ? 'text-green-700 bg-green-50 border-green-200'
+                              : 'text-red-700 bg-red-50 border-red-200'
+                          }`}>
+                            {formatMoney(reservation.fine_amount, settings)}{reservation.fine_paid ? ' • paid' : ''}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-gray-400">-</span>
+                        )}
                       </td>
                       <td className="px-3 py-2">
                         <span className="text-[10px] text-gray-600">{formatUpdatedAt(reservation.updated_at)}</span>

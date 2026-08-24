@@ -1,7 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
 import { BookOpen, Lock, User, Eye, EyeOff, Loader2 } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 import Loader from "@/components/Loader";
@@ -41,43 +40,31 @@ export default function LoginPage() {
     setSubmitting(true);
 
     try {
-      // Authenticate using username and password from users table
-      const { data: users, error } = await supabase
-        .from("users")
-        .select("*")
-        .eq("username", formData.username)
-        .eq("password", formData.password)
-        .single();
+      // Authentication runs server-side: `public.users` has row level security
+      // on, so the browser's anon key reads zero rows from it.
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: formData.username,
+          password: formData.password,
+        }),
+      });
 
-      if (error) {
-        console.error("Database error:", error);
-        if (error.code === "PGRST116") {
-          throw new Error("Invalid username or password");
-        }
-        throw new Error(
-          "Database connection error. Please check if the users table exists."
-        );
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(payload.error || "Invalid username or password");
       }
 
-      if (!users) {
-        throw new Error("Invalid username or password");
-      }
+      // Kept for the header/sidebar display name. The signed httpOnly cookie
+      // set by the route is what actually authorises anything.
+      localStorage.setItem("library_user", JSON.stringify(payload.user));
 
-      // Store user session in localStorage
-      localStorage.setItem(
-        "library_user",
-        JSON.stringify({
-          id: users.id,
-          username: users.username,
-          name: users.name,
-          email: users.email,
-        })
-      );
-
-      toast.success(`Welcome back, ${users.name}!`);
+      toast.success(`Welcome back, ${payload.user.name}!`);
       router.push("/dashboard");
     } catch (error) {
-      console.error("Auth error:", error);
+      console.error("Login failed:", error.message);
       toast.error(error.message || "Invalid username or password");
     } finally {
       setSubmitting(false);

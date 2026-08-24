@@ -1,12 +1,14 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import Header from '@/components/Header'
 import Loader from '@/components/Loader'
-import { supabase } from '@/lib/supabase'
-import { Settings, User, Lock, Eye, EyeOff, Save } from 'lucide-react'
+import { Settings, User, Lock, Eye, EyeOff, Save, Coins } from 'lucide-react'
 import toast, { Toaster } from 'react-hot-toast'
+import { getLibrarySettings, updateLibrarySettings, DEFAULT_SETTINGS, formatMoney } from '@/lib/librarySettings'
 
 export default function SettingsPage() {
+  const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [currentUser, setCurrentUser] = useState(null)
@@ -24,34 +26,66 @@ export default function SettingsPage() {
     confirmPassword: ''
   })
 
+  const [savingFine, setSavingFine] = useState(false)
+  const [librarySettings, setLibrarySettings] = useState(DEFAULT_SETTINGS)
+  const [fineForm, setFineForm] = useState({
+    fine_per_day: String(DEFAULT_SETTINGS.fine_per_day)
+  })
+
   useEffect(() => {
     fetchCurrentUser()
+    fetchLibrarySettings()
   }, [])
+
+  async function fetchLibrarySettings() {
+    const loaded = await getLibrarySettings()
+    setLibrarySettings(loaded)
+    setFineForm({ fine_per_day: String(loaded.fine_per_day) })
+  }
+
+  async function handleUpdateFineSettings(e) {
+    e.preventDefault()
+
+    const finePerDay = Number(fineForm.fine_per_day)
+
+    if (!Number.isFinite(finePerDay) || finePerDay < 0) {
+      toast.error('Fine per day must be zero or more')
+      return
+    }
+
+    try {
+      setSavingFine(true)
+
+      const saved = await updateLibrarySettings({ fine_per_day: finePerDay })
+
+      setLibrarySettings({ ...librarySettings, ...saved })
+      toast.success(`Fine set to ${formatMoney(finePerDay, librarySettings)} per day`)
+    } catch (error) {
+      console.error('Error updating fine settings:', error)
+      toast.error(error.message || 'Failed to update fine settings')
+    } finally {
+      setSavingFine(false)
+    }
+  }
 
   async function fetchCurrentUser() {
     try {
-      const userSession = localStorage.getItem('library_user')
-      if (!userSession) {
-        toast.error('Please login first')
-        setLoading(false)
+      const response = await fetch('/api/account')
+      const payload = await response.json().catch(() => ({}))
+
+      if (response.status === 401 || response.status === 404) {
+        localStorage.removeItem('library_user')
+        toast.error('Your session has expired. Please log in again.')
+        router.push('/')
         return
       }
 
-      const user = JSON.parse(userSession)
+      if (!response.ok) throw new Error(payload.error || 'Failed to fetch user data')
 
-      // Fetch fresh user data from database
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', user.id)
-        .single()
-
-      if (error) throw error
-
-      setCurrentUser(data)
-      setUsernameForm({ username: data.username })
+      setCurrentUser(payload.user)
+      setUsernameForm({ username: payload.user.username })
     } catch (error) {
-      console.error('Error fetching user:', error)
+      console.error('Error fetching user:', error.message)
       toast.error('Failed to fetch user data')
     } finally {
       setLoading(false)
@@ -74,38 +108,24 @@ export default function SettingsPage() {
     try {
       setSaving(true)
 
-      // Check if username already exists
-      const { data: existingUser, error: checkError } = await supabase
-        .from('users')
-        .select('id')
-        .eq('username', usernameForm.username)
-        .neq('id', currentUser.id)
-        .single()
+      const response = await fetch('/api/account', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'username', username: usernameForm.username.trim() })
+      })
 
-      if (existingUser) {
-        toast.error('Username already taken')
-        setSaving(false)
-        return
-      }
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(payload.error || 'Failed to update username')
 
-      // Update username
-      const { error } = await supabase
-        .from('users')
-        .update({ username: usernameForm.username })
-        .eq('id', currentUser.id)
+      // Keep the cached display name in step
+      const cached = JSON.parse(localStorage.getItem('library_user') || '{}')
+      localStorage.setItem('library_user', JSON.stringify({ ...cached, username: payload.user.username }))
 
-      if (error) throw error
-
-      // Update localStorage
-      const userSession = JSON.parse(localStorage.getItem('library_user'))
-      userSession.username = usernameForm.username
-      localStorage.setItem('library_user', JSON.stringify(userSession))
-
-      setCurrentUser({ ...currentUser, username: usernameForm.username })
+      setCurrentUser(payload.user)
       toast.success('Username updated successfully!')
     } catch (error) {
-      console.error('Error updating username:', error)
-      toast.error('Failed to update username')
+      console.error('Error updating username:', error.message)
+      toast.error(error.message)
     } finally {
       setSaving(false)
     }
@@ -137,40 +157,24 @@ export default function SettingsPage() {
     try {
       setSaving(true)
 
-      // Verify current password
-      const { data: userData, error: verifyError } = await supabase
-        .from('users')
-        .select('password')
-        .eq('id', currentUser.id)
-        .single()
-
-      if (verifyError) throw verifyError
-
-      if (userData.password !== passwordForm.currentPassword) {
-        toast.error('Current password is incorrect')
-        setSaving(false)
-        return
-      }
-
-      // Update password
-      const { error } = await supabase
-        .from('users')
-        .update({ password: passwordForm.newPassword })
-        .eq('id', currentUser.id)
-
-      if (error) throw error
-
-      // Clear password form
-      setPasswordForm({
-        currentPassword: '',
-        newPassword: '',
-        confirmPassword: ''
+      const response = await fetch('/api/account', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'password',
+          currentPassword: passwordForm.currentPassword,
+          newPassword: passwordForm.newPassword
+        })
       })
 
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(payload.error || 'Failed to update password')
+
+      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' })
       toast.success('Password updated successfully!')
     } catch (error) {
-      console.error('Error updating password:', error)
-      toast.error('Failed to update password')
+      console.error('Error updating password:', error.message)
+      toast.error(error.message)
     } finally {
       setSaving(false)
     }
@@ -192,8 +196,73 @@ export default function SettingsPage() {
             </div>
             <div>
               <h2 className="text-lg font-bold text-[#002147] font-serif">Account Settings</h2>
-              <p className="text-sm text-gray-600">Manage your username and password</p>
+              <p className="text-sm text-gray-600">Manage your credentials and library-wide fine rules</p>
             </div>
+          </div>
+        </div>
+
+        {/* Fine & Loan Settings */}
+        <div className="bg-white rounded-xl border-2 border-[#fe9800] shadow-xl overflow-hidden">
+          <div className="bg-[#002147] px-4 py-3 border-b-2 border-[#fe9800]">
+            <h3 className="text-base font-bold text-white font-serif flex items-center gap-2">
+              <Coins className="w-5 h-5" />
+              Fine &amp; Loan Settings
+            </h3>
+          </div>
+          <div className="p-4">
+            <p className="text-sm text-gray-600 mb-4">
+              Set how much a borrower is charged for every day a book is kept past its due date.
+              The fine is worked out automatically from the due date on each reservation and keeps
+              growing until the book comes back.
+            </p>
+            <form onSubmit={handleUpdateFineSettings} className="space-y-4">
+              <div className="max-w-xs">
+                <label className="block text-xs font-bold text-[#002147] mb-2 uppercase tracking-wide">
+                  Fine Per Day ({librarySettings.currency}) *
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  required
+                  value={fineForm.fine_per_day}
+                  onChange={(e) => setFineForm({ fine_per_day: e.target.value })}
+                  className="w-full px-3 py-3 border-2 border-gray-200 rounded-lg bg-gray-50 text-gray-900 focus:ring-2 focus:ring-[#fe9800] focus:border-[#fe9800] outline-none transition-all font-medium"
+                  placeholder="10"
+                />
+                <p className="text-[11px] text-gray-500 mt-1">
+                  Charged for each day past the due date. Set to 0 to disable fines.
+                </p>
+              </div>
+
+              <div className="bg-gray-50 rounded-lg p-3 border-2 border-[#002147]">
+                <p className="text-xs font-bold text-[#002147] uppercase tracking-wide mb-1">Example</p>
+                <p className="text-sm text-gray-700">
+                  A book returned <span className="font-bold">5 days</span> after its due date would be fined{' '}
+                  <span className="font-bold text-red-700">
+                    {formatMoney(5 * (Number(fineForm.fine_per_day) || 0), librarySettings)}
+                  </span>.
+                </p>
+              </div>
+
+              <button
+                type="submit"
+                disabled={savingFine}
+                className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-[#fe9800] text-white rounded-lg hover:shadow-xl hover:scale-105 transition-all font-bold border-2 border-[#002147] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+              >
+                {savingFine ? (
+                  <>
+                    <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    Save Fine Settings
+                  </>
+                )}
+              </button>
+            </form>
           </div>
         </div>
 

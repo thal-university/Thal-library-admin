@@ -8,6 +8,14 @@ import { supabase } from '@/lib/supabase'
 import { Plus, Pencil, Trash2, BookOpen, Search, X, AlertTriangle, Upload, FileSpreadsheet, XCircle, Filter, SlidersHorizontal } from 'lucide-react'
 import toast, { Toaster } from 'react-hot-toast'
 import * as XLSX from 'xlsx'
+import {
+  getLibrarySettings,
+  createReservation,
+  DEFAULT_SETTINGS,
+  formatDate,
+  formatMoney,
+  today
+} from '@/lib/librarySettings'
 
 export default function BooksPage() {
   const [loading, setLoading] = useState(true)
@@ -49,6 +57,11 @@ export default function BooksPage() {
     reserver_id: '',
     reserver_role: 'student'
   })
+  const [librarySettings, setLibrarySettings] = useState(DEFAULT_SETTINGS)
+  const [allocationDates, setAllocationDates] = useState({
+    issue_date: today(),
+    due_date: ''
+  })
 
   // const libraryQuotes = [
   //   "A library is not a luxury but one of the necessities of life. - Henry Ward Beecher",
@@ -62,7 +75,12 @@ export default function BooksPage() {
   useEffect(() => {
     fetchBooks()
     fetchDepartments()
+    fetchLibrarySettings()
   }, [])
+
+  async function fetchLibrarySettings() {
+    setLibrarySettings(await getLibrarySettings())
+  }
 
   async function fetchBooks() {
     try {
@@ -227,6 +245,7 @@ export default function BooksPage() {
     if (book.status === 'Available') {
       setBookToAllocate(book)
       setReserverInfo({ reserver_name: '', reserver_id: '', reserver_role: 'student' })
+      setAllocationDates({ issue_date: today(), due_date: '' })
       setShowAllocationModal(true)
       return
     }
@@ -260,33 +279,34 @@ export default function BooksPage() {
 
     if (!bookToAllocate) return
 
+    const { issue_date: issueDate, due_date: dueDate } = allocationDates
+
+    if (!issueDate || !dueDate) {
+      toast.error('Please set both an issue date and a due date')
+      return
+    }
+
+    if (new Date(dueDate) < new Date(issueDate)) {
+      toast.error('Due date cannot be earlier than the issue date')
+      return
+    }
+
     try {
       setAllocating(true)
 
-      // Create a confirmed reservation
-      const { error: reservationError } = await supabase
-        .from('reservations')
-        .insert([{
-          reserver_id: reserverInfo.reserver_id,
-          reserver_role: reserverInfo.reserver_role,
-          reserver_name: reserverInfo.reserver_name,
-          book_name: bookToAllocate.name,
-          book_id: bookToAllocate.book_id,
-          book_sr_no: bookToAllocate.sr_no || '',
-          status: 'confirmed'
-        }])
+      // Goes through /api/reservations, which uses the service role key and so
+      // is not blocked by the mobile app's row level security policies.
+      await createReservation({
+        book_id: bookToAllocate.book_id,
+        reserver_id: reserverInfo.reserver_id,
+        reserver_name: reserverInfo.reserver_name,
+        reserver_role: reserverInfo.reserver_role,
+        issue_date: issueDate,
+        due_date: dueDate,
+        status: 'confirmed'
+      })
 
-      if (reservationError) throw reservationError
-
-      // Update book status to Allocated
-      const { error: bookError } = await supabase
-        .from('books')
-        .update({ status: 'Allocated' })
-        .eq('id', bookToAllocate.id)
-
-      if (bookError) throw bookError
-
-      toast.success('Book allocated successfully!')
+      toast.success(`Book allocated! Issued ${formatDate(issueDate)}, due ${formatDate(dueDate)}.`)
       setShowAllocationModal(false)
       setBookToAllocate(null)
       setReserverInfo({ reserver_name: '', reserver_id: '', reserver_role: 'student' })
@@ -298,6 +318,7 @@ export default function BooksPage() {
       setAllocating(false)
     }
   }
+
 
   function openEditModal(book) {
     setEditingBook(book)
@@ -1562,17 +1583,25 @@ export default function BooksPage() {
               <div className="bg-gray-50 rounded-lg p-4 mb-6 border-2 border-[#002147]">
                 <h3 className="text-sm font-bold text-[#002147] mb-2">Book Details</h3>
                 <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Title:</span>
-                    <span className="font-medium text-[#002147]">{bookToAllocate.name}</span>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-gray-600 flex-shrink-0">Title:</span>
+                    <span className="font-medium text-[#002147] text-right">{bookToAllocate.name}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Author:</span>
-                    <span className="font-medium">{bookToAllocate.author}</span>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-gray-600 flex-shrink-0">Author:</span>
+                    <span className="font-medium text-[#002147] text-right">{bookToAllocate.author || 'N/A'}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Sr No:</span>
-                    <span className="font-medium">{bookToAllocate.sr_no}</span>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-gray-600 flex-shrink-0">Sr No:</span>
+                    <span className="font-medium text-[#002147] text-right">{bookToAllocate.sr_no || 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-gray-600 flex-shrink-0">Book ID:</span>
+                    <span className="font-medium text-[#002147] text-right">{bookToAllocate.book_id}</span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-gray-600 flex-shrink-0">Department:</span>
+                    <span className="font-medium text-[#002147] text-right">{bookToAllocate.department || 'N/A'}</span>
                   </div>
                 </div>
               </div>
@@ -1619,6 +1648,40 @@ export default function BooksPage() {
                     <option value="student">Student</option>
                     <option value="teacher">Teacher</option>
                   </select>
+                </div>
+
+                {/* Issue date / due date */}
+                <div className="bg-white border-2 border-[#fe9800] rounded-lg p-3">
+                  <p className="text-xs font-bold text-[#002147] uppercase tracking-wide mb-2">
+                    Loan Period
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-600 uppercase mb-1">Issue Date *</label>
+                      <input
+                        type="date"
+                        required
+                        value={allocationDates.issue_date}
+                        onChange={(e) => setAllocationDates({ ...allocationDates, issue_date: e.target.value })}
+                        className="w-full px-2 py-2 border-2 border-gray-200 rounded-lg bg-gray-50 text-gray-900 text-sm focus:ring-2 focus:ring-[#fe9800] focus:border-[#fe9800] outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-600 uppercase mb-1">Due Date *</label>
+                      <input
+                        type="date"
+                        required
+                        min={allocationDates.issue_date || undefined}
+                        value={allocationDates.due_date}
+                        onChange={(e) => setAllocationDates({ ...allocationDates, due_date: e.target.value })}
+                        className="w-full px-2 py-2 border-2 border-gray-200 rounded-lg bg-gray-50 text-gray-900 text-sm focus:ring-2 focus:ring-[#fe9800] focus:border-[#fe9800] outline-none"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-gray-500 mt-2">
+                    Pick when the book is due back. Every day past it is fined{' '}
+                    <span className="font-bold text-[#002147]">{formatMoney(librarySettings.fine_per_day, librarySettings)}</span>.
+                  </p>
                 </div>
 
                 <div className="flex gap-3 pt-4 border-t-2 border-[#002147]">

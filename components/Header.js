@@ -17,8 +17,13 @@ export default function Header({ title }) {
     }
   }, [])
 
-  const handleLogout = () => {
-    // Clear session from localStorage
+  const handleLogout = async () => {
+    // Clear the signed session cookie, then the cached display name
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' })
+    } catch (error) {
+      console.error('Logout request failed:', error)
+    }
     localStorage.removeItem('library_user')
     router.push('/')
   }

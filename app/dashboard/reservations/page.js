@@ -2,9 +2,20 @@
 import { useEffect, useState } from 'react'
 import Header from '@/components/Header'
 import Loader from '@/components/Loader'
-import { supabase } from '@/lib/supabase'
-import { BookMarked, Search, X, CheckCircle, XCircle, AlertTriangle, Filter } from 'lucide-react'
+import { BookMarked, Search, X, CheckCircle, XCircle, AlertTriangle, Filter, CalendarDays, Undo2, Plus } from 'lucide-react'
 import toast, { Toaster } from 'react-hot-toast'
+import {
+  getLibrarySettings,
+  fetchReservationsList,
+  updateReservation,
+  deleteReservation,
+  DEFAULT_SETTINGS,
+  calculateFine,
+  formatDate,
+  formatMoney,
+  today
+} from '@/lib/librarySettings'
+import ReserveBookModal from '@/components/ReserveBookModal'
 
 export default function ReservationsPage() {
   const [loading, setLoading] = useState(true)
@@ -18,34 +29,24 @@ export default function ReservationsPage() {
   const [selectedReservation, setSelectedReservation] = useState(null)
   const [existingReservation, setExistingReservation] = useState(null)
   const [_currentTime, setCurrentTime] = useState(new Date())
+  const [settings, setSettings] = useState(DEFAULT_SETTINGS)
+  const [issueDate, setIssueDate] = useState(today())
+  const [dueDate, setDueDate] = useState('')
+  const [showReturnModal, setShowReturnModal] = useState(false)
+  const [returnDate, setReturnDate] = useState(today())
+  const [showReserveModal, setShowReserveModal] = useState(false)
 
   useEffect(() => {
     fetchReservations()
+    fetchSettings()
     // Clean up old pending reservations on page load
     cleanupOldReservations()
 
-    // Set up Supabase realtime subscription for instant updates
-    const channel = supabase
-      .channel('reservations-changes')
-      .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'reservations' },
-        (payload) => {
-          console.log('Realtime update received:', payload)
-          fetchReservations()
-        }
-      )
-      .subscribe()
+    // Poll for updates. Supabase realtime cannot be used here: it honours row
+    // level security, which hides `reservations` from the anon key.
+    const refreshInterval = setInterval(fetchReservations, 10000)
 
-    // Fallback: Also use polling every 10 seconds
-    const refreshInterval = setInterval(() => {
-      console.log('Polling for updates...')
-      fetchReservations()
-    }, 10000) // 10 seconds
-
-    return () => {
-      supabase.removeChannel(channel)
-      clearInterval(refreshInterval)
-    }
+    return () => clearInterval(refreshInterval)
   }, [])
 
   // Update time every second for live countdown
@@ -57,39 +58,15 @@ export default function ReservationsPage() {
     return () => clearInterval(timer)
   }, [])
 
+  async function fetchSettings() {
+    setSettings(await getLibrarySettings())
+  }
+
   async function fetchReservations() {
     try {
-      // Fetch reservations without foreign key join
-      const { data: reservationsData, error } = await supabase
-        .from('reservations')
-        .select('*')
-        .order('reservation_date', { ascending: false })
-
-      if (error) throw error
-
-      // Get unique book_sr_no values to fetch book details
-      const bookSrNos = [...new Set(reservationsData?.map(r => r.book_sr_no).filter(Boolean))]
-
-      let booksMap = {}
-      if (bookSrNos.length > 0) {
-        const { data: booksData } = await supabase
-          .from('books')
-          .select('id, name, author, department, status, sr_no')
-          .in('sr_no', bookSrNos)
-
-        // Create a map of sr_no to book data
-        booksData?.forEach(book => {
-          booksMap[book.sr_no] = book
-        })
-      }
-
-      // Attach book data to reservations
-      const reservationsWithBooks = reservationsData?.map(reservation => ({
-        ...reservation,
-        book: reservation.book_sr_no ? booksMap[reservation.book_sr_no] || null : null
-      })) || []
-
-      setReservations(reservationsWithBooks)
+      // Served by /api/reservations: row level security hides the table from
+      // the browser's anon key, so this read runs with the service role key.
+      setReservations(await fetchReservationsList('all'))
     } catch (error) {
       console.error('Error fetching reservations:', error)
       toast.error('Failed to fetch reservations')
@@ -100,16 +77,9 @@ export default function ReservationsPage() {
 
   async function cleanupOldReservations() {
     try {
-      // Delete pending reservations older than 24 hours
-      const twentyFourHoursAgo = new Date(Date.now() - 43 * 60 * 60 * 1000).toISOString()
-
-      const { error } = await supabase
-        .from('reservations')
-        .delete()
-        .eq('status', 'pending')
-        .lt('created_at', twentyFourHoursAgo)
-
-      if (error) throw error
+      // Expired pending reservations are swept server-side, where the service
+      // role key is available.
+      await fetch('/api/reservations/cleanup', { method: 'POST' })
     } catch (error) {
       console.error('Error cleaning up old reservations:', error)
     }
@@ -117,17 +87,12 @@ export default function ReservationsPage() {
 
   async function handleConfirm(reservation, forceConfirm = false) {
     try {
-      // Check if the reserver already has a confirmed reservation
-      const { data: existingConfirmed, error: checkError } = await supabase
-        .from('reservations')
-        .select('id, book_name')
-        .eq('reserver_id', reservation.reserver_id)
-        .eq('status', 'confirmed')
+      // One book per person unless the admin overrides it
+      const existingConfirmed = reservations.filter(
+        r => r.status === 'confirmed' && r.reserver_id === reservation.reserver_id
+      )
 
-      if (checkError) throw checkError
-
-      // If they already have a confirmed reservation and not forcing, show error
-      if (existingConfirmed && existingConfirmed.length > 0 && !forceConfirm) {
+      if (existingConfirmed.length > 0 && !forceConfirm) {
         toast.error(
           `Cannot confirm! ${reservation.reserver_name} already has a confirmed reservation for "${existingConfirmed[0].book_name}". Please return the previously borrowed book before reserving another.`,
           { duration: 6000 }
@@ -138,48 +103,25 @@ export default function ReservationsPage() {
         return
       }
 
-      // Get the book's UUID (book_id) from the books table using sr_no
-      const bookSrNo = reservation.book_sr_no || reservation.book?.sr_no
-      const { data: bookData, error: bookLookupError } = await supabase
-        .from('books')
-        .select('id, book_id')
-        .eq('sr_no', bookSrNo)
-        .single()
-
-      if (bookLookupError || !bookData) {
-        console.error('Error finding book:', bookLookupError)
-        toast.error('Could not find the book to confirm reservation')
+      if (!issueDate || !dueDate) {
+        toast.error('Please set both an issue date and a due date')
         return
       }
 
-      // Update reservation status to 'confirmed' and set the book_id
-      const { error } = await supabase
-        .from('reservations')
-        .update({
-          status: 'confirmed',
-          book_id: bookData.book_id,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', reservation.id)
-
-      if (error) throw error
-
-      // Update book status to 'Allocated'
-      const { error: bookError } = await supabase
-        .from('books')
-        .update({ status: 'Allocated' })
-        .eq('id', bookData.id)
-
-      if (bookError) {
-        console.error('Error updating book status:', bookError)
-        toast.error('Reservation confirmed but failed to update book status')
+      if (new Date(dueDate) < new Date(issueDate)) {
+        toast.error('Due date cannot be earlier than the issue date')
         return
       }
+
+      await updateReservation(reservation.id, 'confirm', {
+        issue_date: issueDate,
+        due_date: dueDate
+      })
 
       if (forceConfirm) {
         toast.success(`Reservation confirmed! Note: ${reservation.reserver_name} now has multiple confirmed reservations.`, { duration: 6000 })
       } else {
-        toast.success('Reservation confirmed successfully! Book status updated to Allocated.')
+        toast.success(`Reservation confirmed! Issued ${formatDate(issueDate)}, due ${formatDate(dueDate)}.`)
       }
 
       setShowConfirmModal(false)
@@ -188,7 +130,7 @@ export default function ReservationsPage() {
       fetchReservations()
     } catch (error) {
       console.error('Error confirming reservation:', error)
-      toast.error('Failed to confirm reservation')
+      toast.error(`Failed to confirm reservation: ${error.message}`)
       setShowConfirmModal(false)
       setSelectedReservation(null)
       setExistingReservation(null)
@@ -197,69 +139,32 @@ export default function ReservationsPage() {
 
   async function handleDelete(reservation) {
     try {
-      // If reservation was confirmed, update book status back to 'Available'
-      if (reservation.status === 'confirmed') {
-        const { error: bookError } = await supabase
-          .from('books')
-          .update({ status: 'Available' })
-          .eq('sr_no', reservation.book_sr_no || reservation.book?.sr_no)
+      // Confirmed reservations are archived (so the record survives); pending
+      // ones are removed outright. The route decides and frees the book.
+      await deleteReservation(reservation.id)
 
-        if (bookError) {
-          console.error('Error updating book status:', bookError)
-          toast.error('Failed to update book status to Available')
-          return
-        }
-      }
-
-      // If it was confirmed, mark as deleted (archive) so it appears in Completed Reservations
-      if (reservation.status === 'confirmed') {
-        const { error: deleteError } = await supabase
-          .from('reservations')
-          .update({ status: 'deleted', updated_at: new Date().toISOString() })
-          .eq('id', reservation.id)
-
-        if (deleteError) throw deleteError
-      } else {
-        // For pending or other statuses, delete as before
-        const { error: deleteError } = await supabase
-          .from('reservations')
-          .delete()
-          .eq('id', reservation.id)
-
-        if (deleteError) throw deleteError
-      }
-
-      toast.success('Reservation deleted successfully! Book status updated to Available.')
+      toast.success('Reservation removed. Book is available again.')
       setShowDeleteModal(false)
       setSelectedReservation(null)
       fetchReservations()
     } catch (error) {
       console.error('Error deleting reservation:', error)
-      toast.error('Failed to delete reservation')
+      toast.error(`Failed to delete reservation: ${error.message}`)
     }
   }
 
   async function openConfirmModal(reservation) {
     setSelectedReservation(reservation)
 
-    // Check if user already has a confirmed reservation
-    try {
-      const { data: existingConfirmed, error } = await supabase
-        .from('reservations')
-        .select('id, book_name, book_sr_no')
-        .eq('reserver_id', reservation.reserver_id)
-        .eq('status', 'confirmed')
-        .limit(1)
+    // Issue today by default; the admin picks how long the loan runs
+    setIssueDate(today())
+    setDueDate('')
 
-      if (!error && existingConfirmed && existingConfirmed.length > 0) {
-        setExistingReservation(existingConfirmed[0])
-      } else {
-        setExistingReservation(null)
-      }
-    } catch (error) {
-      console.error('Error checking existing reservations:', error)
-      setExistingReservation(null)
-    }
+    // Warn if this borrower already has a book out
+    const alreadyOut = reservations.find(
+      r => r.status === 'confirmed' && r.reserver_id === reservation.reserver_id
+    )
+    setExistingReservation(alreadyOut || null)
 
     setShowConfirmModal(true)
   }
@@ -267,6 +172,41 @@ export default function ReservationsPage() {
   function openDeleteModal(reservation) {
     setSelectedReservation(reservation)
     setShowDeleteModal(true)
+  }
+
+  function openReturnModal(reservation) {
+    setSelectedReservation(reservation)
+    setReturnDate(today())
+    setShowReturnModal(true)
+  }
+
+  async function handleReturn(reservation) {
+    try {
+      if (!returnDate) {
+        toast.error('Please pick a return date')
+        return
+      }
+
+      const { fine } = await updateReservation(reservation.id, 'return', {
+        return_date: returnDate
+      })
+
+      if (fine?.amount > 0) {
+        toast.success(
+          `Returned ${fine.days} day(s) late. Fine due: ${formatMoney(fine.amount, settings)}`,
+          { duration: 6000 }
+        )
+      } else {
+        toast.success('Book returned on time. No fine due.')
+      }
+
+      setShowReturnModal(false)
+      setSelectedReservation(null)
+      fetchReservations()
+    } catch (error) {
+      console.error('Error returning reservation:', error)
+      toast.error(`Failed to record the return: ${error.message}`)
+    }
   }
 
   function getTimeRemaining(reservationDate) {
@@ -288,10 +228,15 @@ export default function ReservationsPage() {
   // Filter and search reservations
   const filteredReservations = reservations
     .filter(reservation => {
-      // Exclude archived (deleted) reservations from the main reservations view
-      if (reservation.status === 'deleted') return false
-      // Status filter
-      if (filterStatus !== 'all' && reservation.status !== filterStatus) return false
+      // Exclude archived (returned / deleted) reservations from the main view
+      if (reservation.status === 'deleted' || reservation.status === 'returned' || reservation.status === 'completed') return false
+      // Status filter ('overdue' is a derived status, not a stored one)
+      if (filterStatus === 'overdue') {
+        if (reservation.status !== 'confirmed') return false
+        if (calculateFine(reservation.due_date, null, settings).days === 0) return false
+      } else if (filterStatus !== 'all' && reservation.status !== filterStatus) {
+        return false
+      }
 
       // Role filter
       if (filterRole !== 'all' && reservation.reserver_role !== filterRole) return false
@@ -310,11 +255,14 @@ export default function ReservationsPage() {
       return true
     })
 
+  const isActive = (r) => r.status === 'pending' || r.status === 'confirmed'
+
   // Calculate stats
   const stats = {
-    total: reservations.filter(r => r.status !== 'deleted').length,
+    total: reservations.filter(isActive).length,
     pending: reservations.filter(r => r.status === 'pending').length,
     confirmed: reservations.filter(r => r.status === 'confirmed').length,
+    overdue: reservations.filter(r => r.status === 'confirmed' && calculateFine(r.due_date, null, settings).days > 0).length,
     students: reservations.filter(r => r.reserver_role === 'student').length,
     teachers: reservations.filter(r => r.reserver_role === 'teacher').length,
   }
@@ -354,6 +302,16 @@ export default function ReservationsPage() {
                   </button>
                 )}
               </div>
+
+              {/* Admin: search a book and reserve it directly */}
+              <button
+                onClick={() => setShowReserveModal(true)}
+                className="flex items-center gap-1.5 px-3 sm:px-4 py-2 bg-[#fe9800] text-white rounded-lg font-bold text-sm border-2 border-[#002147] hover:shadow-lg transition-all whitespace-nowrap"
+                title="Search a book and reserve it"
+              >
+                <Plus className="w-4 h-4" />
+                <span className="hidden sm:inline">Search &amp; Reserve</span>
+              </button>
 
               {/* Mobile: Filter Icon */}
               <button
@@ -401,6 +359,16 @@ export default function ReservationsPage() {
               >
                 Confirmed ({stats.confirmed})
               </button>
+              <button
+                onClick={() => setFilterStatus('overdue')}
+                className={`px-4 py-1.5 rounded-lg font-bold transition-all shadow-md text-sm border-2 ${
+                  filterStatus === 'overdue'
+                    ? 'bg-red-600 text-white shadow-lg scale-105 border-red-800'
+                    : 'bg-white text-[#002147] border-[#002147] hover:bg-gray-50'
+                }`}
+              >
+                Overdue ({stats.overdue})
+              </button>
               <select
                 value={filterRole}
                 onChange={(e) => setFilterRole(e.target.value)}
@@ -415,7 +383,7 @@ export default function ReservationsPage() {
             {/* Mobile: Collapsible Filters */}
             {showFilters && (
               <div className="md:hidden flex flex-col gap-2 pt-2 border-t border-gray-200">
-                <div className="grid grid-cols-3 gap-1.5">
+                <div className="grid grid-cols-4 gap-1.5">
                   <button
                     onClick={() => setFilterStatus('all')}
                     className={`px-2 py-2 rounded-lg font-bold transition-all text-xs border-2 ${
@@ -445,6 +413,16 @@ export default function ReservationsPage() {
                     }`}
                   >
                     Conf ({stats.confirmed})
+                  </button>
+                  <button
+                    onClick={() => setFilterStatus('overdue')}
+                    className={`px-2 py-2 rounded-lg font-bold transition-all text-xs border-2 ${
+                      filterStatus === 'overdue'
+                        ? 'bg-red-600 text-white border-red-800'
+                        : 'bg-white text-[#002147] border-[#002147]'
+                    }`}
+                  >
+                    Late ({stats.overdue})
                   </button>
                 </div>
                 <select
@@ -516,6 +494,21 @@ export default function ReservationsPage() {
                         <p className="text-xs font-semibold text-[#002147] truncate flex-1">{reservation.book_name}</p>
                         <span className="text-[10px] text-gray-500">SR: {reservation.book?.sr_no || reservation.book_sr_no || 'N/A'}</span>
                       </div>
+                      {reservation.status === 'confirmed' && (
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-1">
+                          <span className="text-[10px] text-gray-600">
+                            <span className="font-semibold text-[#002147]">Issued:</span> {formatDate(reservation.issue_date)}
+                          </span>
+                          <span className={`text-[10px] ${calculateFine(reservation.due_date, null, settings).days > 0 ? 'text-red-600 font-semibold' : 'text-gray-600'}`}>
+                            <span className="font-semibold text-[#002147]">Due:</span> {formatDate(reservation.due_date)}
+                          </span>
+                          {calculateFine(reservation.due_date, null, settings).amount > 0 && (
+                            <span className="text-[10px] font-bold text-red-700 bg-red-50 px-1.5 py-0.5 rounded border border-red-200">
+                              Fine {formatMoney(calculateFine(reservation.due_date, null, settings).amount, settings)}
+                            </span>
+                          )}
+                        </div>
+                      )}
                       {reservation.status === 'pending' && (
                         <span className={`text-[10px] font-bold ${
                           (() => {
@@ -551,13 +544,22 @@ export default function ReservationsPage() {
                         </>
                       )}
                       {reservation.status === 'confirmed' && (
-                        <button
-                          onClick={() => openDeleteModal(reservation)}
-                          className="p-1.5 bg-red-500 text-white rounded-lg border border-red-700"
-                          title="Delete"
-                        >
-                          <XCircle className="w-4 h-4" />
-                        </button>
+                        <>
+                          <button
+                            onClick={() => openReturnModal(reservation)}
+                            className="p-1.5 bg-[#002147] text-white rounded-lg border border-[#fe9800]"
+                            title="Mark as Returned"
+                          >
+                            <Undo2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => openDeleteModal(reservation)}
+                            className="p-1.5 bg-red-500 text-white rounded-lg border border-red-700"
+                            title="Delete"
+                          >
+                            <XCircle className="w-4 h-4" />
+                          </button>
+                        </>
                       )}
                     </div>
                   </div>
@@ -576,6 +578,9 @@ export default function ReservationsPage() {
                   <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Book Details</th>
                   <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Department</th>
                   <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Status</th>
+                  <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Issue Date</th>
+                  <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Due Date</th>
+                  <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Fine</th>
                   <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Time Left</th>
                   <th className="px-3 py-2 text-center text-xs font-bold text-[#002147] uppercase tracking-tight">Actions</th>
                 </tr>
@@ -583,7 +588,7 @@ export default function ReservationsPage() {
               <tbody className="divide-y divide-gray-200">
                 {filteredReservations.length === 0 ? (
                   <tr>
-                    <td colSpan="7" className="px-4 py-12 text-center text-gray-500">
+                    <td colSpan="10" className="px-4 py-12 text-center text-gray-500">
                       <BookMarked className="w-12 h-12 mx-auto mb-3 text-gray-400" />
                       <p className="font-medium">No reservations found</p>
                       <p className="text-sm">Try adjusting your filters or search query</p>
@@ -669,6 +674,41 @@ export default function ReservationsPage() {
                         </span>
                       </td>
                       <td className="px-3 py-2">
+                        <span className="text-[10px] text-gray-600 whitespace-nowrap">
+                          {formatDate(reservation.issue_date)}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2">
+                        {(() => {
+                          if (!reservation.due_date) {
+                            return <span className="text-[10px] text-gray-400">-</span>
+                          }
+                          const overdue = reservation.status === 'confirmed' && calculateFine(reservation.due_date, null, settings).days > 0
+                          return (
+                            <span className={`text-[10px] font-semibold whitespace-nowrap ${overdue ? 'text-red-600' : 'text-gray-600'}`}>
+                              {formatDate(reservation.due_date)}
+                            </span>
+                          )
+                        })()}
+                      </td>
+                      <td className="px-3 py-2">
+                        {(() => {
+                          if (reservation.status !== 'confirmed' || !reservation.due_date) {
+                            return <span className="text-[10px] text-gray-400">-</span>
+                          }
+                          const fine = calculateFine(reservation.due_date, null, settings)
+                          if (fine.days === 0) {
+                            return <span className="text-[10px] text-green-600 font-semibold">On time</span>
+                          }
+                          return (
+                            <span className="inline-flex flex-col">
+                              <span className="text-[10px] font-bold text-red-700">{formatMoney(fine.amount, settings)}</span>
+                              <span className="text-[9px] text-red-500">{fine.days}d late</span>
+                            </span>
+                          )
+                        })()}
+                      </td>
+                      <td className="px-3 py-2">
                         {reservation.status === 'pending' ? (
                           (() => {
                             const timeLeft = getTimeRemaining(reservation.created_at)
@@ -725,13 +765,22 @@ export default function ReservationsPage() {
                             </>
                           )}
                           {reservation.status === 'confirmed' && (
-                            <button
-                              onClick={() => openDeleteModal(reservation)}
-                              className="p-1.5 bg-red-500 text-white rounded hover:bg-red-600 transition-colors border border-red-700"
-                              title="Delete Reservation"
-                            >
-                              <XCircle className="w-3.5 h-3.5" />
-                            </button>
+                            <>
+                              <button
+                                onClick={() => openReturnModal(reservation)}
+                                className="p-1.5 bg-[#002147] text-white rounded hover:bg-[#00335f] transition-colors border border-[#fe9800]"
+                                title="Mark as Returned"
+                              >
+                                <Undo2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => openDeleteModal(reservation)}
+                                className="p-1.5 bg-red-500 text-white rounded hover:bg-red-600 transition-colors border border-red-700"
+                                title="Delete Reservation"
+                              >
+                                <XCircle className="w-3.5 h-3.5" />
+                              </button>
+                            </>
                           )}
                         </div>
                       </td>
@@ -804,6 +853,42 @@ export default function ReservationsPage() {
                   </div>
                 </>
               )}
+
+              {/* Issue date / due date — set on every reservation */}
+              <div className="bg-white border-2 border-[#fe9800] rounded-lg p-3 mb-4">
+                <p className="text-xs font-bold text-[#002147] uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                  <CalendarDays className="w-4 h-4 text-[#fe9800]" />
+                  Loan Period
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-600 uppercase mb-1">Issue Date *</label>
+                    <input
+                      type="date"
+                      required
+                      value={issueDate}
+                      onChange={(e) => setIssueDate(e.target.value)}
+                      className="w-full px-2 py-2 border-2 border-gray-200 rounded-lg bg-gray-50 text-gray-900 text-sm focus:ring-2 focus:ring-[#fe9800] focus:border-[#fe9800] outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-600 uppercase mb-1">Due Date *</label>
+                    <input
+                      type="date"
+                      required
+                      value={dueDate}
+                      min={issueDate || undefined}
+                      onChange={(e) => setDueDate(e.target.value)}
+                      className="w-full px-2 py-2 border-2 border-gray-200 rounded-lg bg-gray-50 text-gray-900 text-sm focus:ring-2 focus:ring-[#fe9800] focus:border-[#fe9800] outline-none"
+                    />
+                  </div>
+                </div>
+                <p className="text-[10px] text-gray-500 mt-2">
+                  Pick when the book is due back. Every day past it is fined{' '}
+                  <span className="font-bold text-[#002147]">{formatMoney(settings.fine_per_day, settings)}</span>.
+                </p>
+              </div>
+
               <div className="flex gap-3">
                 <button
                   onClick={() => {
@@ -875,6 +960,92 @@ export default function ReservationsPage() {
           </div>
         </div>
       )}
+
+      {/* Search & Reserve Modal */}
+      {showReserveModal && (
+        <ReserveBookModal
+          settings={settings}
+          onClose={() => setShowReserveModal(false)}
+          onCreated={fetchReservations}
+        />
+      )}
+
+      {/* Return Modal */}
+      {showReturnModal && selectedReservation && (() => {
+        const fine = calculateFine(selectedReservation.due_date, returnDate, settings)
+        return (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-md w-full border-2 border-[#fe9800] shadow-2xl">
+              <div className="p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-12 h-12 bg-[#fe9800]/15 rounded-full flex items-center justify-center border-2 border-[#fe9800]">
+                    <Undo2 className="w-6 h-6 text-[#fe9800]" />
+                  </div>
+                  <h3 className="text-xl font-bold text-[#002147]">Return Book</h3>
+                </div>
+
+                <div className="bg-gray-50 p-4 rounded-lg mb-4 border-2 border-gray-200">
+                  <p className="text-sm font-semibold text-[#002147]">{selectedReservation.reserver_name}</p>
+                  <p className="text-sm text-gray-600">{selectedReservation.book_name}</p>
+                  <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-gray-200">
+                    <div>
+                      <p className="text-[10px] font-bold text-gray-500 uppercase">Issued</p>
+                      <p className="text-xs font-semibold text-[#002147]">{formatDate(selectedReservation.issue_date)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-gray-500 uppercase">Due</p>
+                      <p className="text-xs font-semibold text-[#002147]">{formatDate(selectedReservation.due_date)}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-[10px] font-bold text-gray-600 uppercase mb-1">Return Date *</label>
+                  <input
+                    type="date"
+                    value={returnDate}
+                    onChange={(e) => setReturnDate(e.target.value)}
+                    className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg bg-gray-50 text-gray-900 text-sm focus:ring-2 focus:ring-[#fe9800] focus:border-[#fe9800] outline-none"
+                  />
+                </div>
+
+                <div className={`rounded-lg p-3 mb-4 border-2 ${fine.amount > 0 ? 'bg-red-50 border-red-300' : 'bg-green-50 border-green-300'}`}>
+                  {fine.amount > 0 ? (
+                    <>
+                      <p className="text-sm font-bold text-red-800">
+                        Fine due: {formatMoney(fine.amount, settings)}
+                      </p>
+                      <p className="text-xs text-red-700 mt-0.5">
+                        {fine.days} day(s) late &times; {formatMoney(settings.fine_per_day, settings)} per day
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-sm font-bold text-green-800">Returned on time — no fine due.</p>
+                  )}
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      setShowReturnModal(false)
+                      setSelectedReservation(null)
+                    }}
+                    className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium border-2 border-gray-400"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => handleReturn(selectedReservation)}
+                    className="flex-1 px-4 py-2 bg-[#002147] text-white rounded-lg hover:bg-[#00335f] transition-colors font-medium border-2 border-[#fe9800]"
+                  >
+                    Confirm Return
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
