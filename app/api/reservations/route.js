@@ -5,7 +5,12 @@ import { today } from '@/lib/loans'
 import { attachBooks, ACTIVE_STATUSES, ARCHIVED_STATUSES } from '@/lib/reservationsServer'
 
 /**
- * GET /api/reservations?scope=active|archived|all
+ * GET /api/reservations?scope=active|archived|all|fines
+ *
+ * `fines` returns every row that carries a fine: one already charged at return
+ * (`fine_amount > 0`, paid or not) and one still building up on a book that is
+ * out past its due date. The second kind has no stored amount yet -- the page
+ * works it out live -- so it has to be matched on the due date instead.
  *
  * `public.reservations` has row level security scoped to the mobile app's
  * signed-in user, so the browser's anon key reads zero rows from it. All
@@ -25,6 +30,10 @@ export async function GET(request) {
 
     if (scope === 'active') {
       query = query.in('status', ACTIVE_STATUSES).order('reservation_date', { ascending: false })
+    } else if (scope === 'fines') {
+      query = query
+        .or(`fine_amount.gt.0,and(status.eq.confirmed,due_date.lt.${today()})`)
+        .order('updated_at', { ascending: false })
     } else if (scope === 'archived') {
       query = query.in('status', ARCHIVED_STATUSES).order('updated_at', { ascending: false })
     } else {

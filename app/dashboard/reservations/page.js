@@ -2,13 +2,12 @@
 import { useEffect, useState } from 'react'
 import Header from '@/components/Header'
 import Loader from '@/components/Loader'
-import { BookMarked, Search, X, CheckCircle, XCircle, AlertTriangle, Filter, CalendarDays, Undo2, Plus } from 'lucide-react'
+import { BookMarked, Search, X, CheckCircle, AlertTriangle, Filter, CalendarDays, Undo2, Plus } from 'lucide-react'
 import toast, { Toaster } from 'react-hot-toast'
 import {
   getLibrarySettings,
   fetchReservationsList,
   updateReservation,
-  deleteReservation,
   DEFAULT_SETTINGS,
   calculateFine,
   formatDate,
@@ -25,7 +24,6 @@ export default function ReservationsPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [showFilters, setShowFilters] = useState(false)
   const [showConfirmModal, setShowConfirmModal] = useState(false)
-  const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [selectedReservation, setSelectedReservation] = useState(null)
   const [existingReservation, setExistingReservation] = useState(null)
   const [_currentTime, setCurrentTime] = useState(new Date())
@@ -34,6 +32,8 @@ export default function ReservationsPage() {
   const [dueDate, setDueDate] = useState('')
   const [showReturnModal, setShowReturnModal] = useState(false)
   const [returnDate, setReturnDate] = useState(today())
+  const [fineAmount, setFineAmount] = useState('0')
+  const [finePaid, setFinePaid] = useState(false)
   const [showReserveModal, setShowReserveModal] = useState(false)
 
   useEffect(() => {
@@ -137,22 +137,6 @@ export default function ReservationsPage() {
     }
   }
 
-  async function handleDelete(reservation) {
-    try {
-      // Confirmed reservations are archived (so the record survives); pending
-      // ones are removed outright. The route decides and frees the book.
-      await deleteReservation(reservation.id)
-
-      toast.success('Reservation removed. Book is available again.')
-      setShowDeleteModal(false)
-      setSelectedReservation(null)
-      fetchReservations()
-    } catch (error) {
-      console.error('Error deleting reservation:', error)
-      toast.error(`Failed to delete reservation: ${error.message}`)
-    }
-  }
-
   async function openConfirmModal(reservation) {
     setSelectedReservation(reservation)
 
@@ -169,14 +153,17 @@ export default function ReservationsPage() {
     setShowConfirmModal(true)
   }
 
-  function openDeleteModal(reservation) {
-    setSelectedReservation(reservation)
-    setShowDeleteModal(true)
-  }
-
   function openReturnModal(reservation) {
     setSelectedReservation(reservation)
-    setReturnDate(today())
+
+    const due = today()
+    setReturnDate(due)
+
+    // Start from what the rules say is owed; the admin can adjust or waive it.
+    const owed = calculateFine(reservation.due_date, due, settings)
+    setFineAmount(String(owed.amount))
+    setFinePaid(owed.amount === 0)
+
     setShowReturnModal(true)
   }
 
@@ -187,17 +174,26 @@ export default function ReservationsPage() {
         return
       }
 
+      const charged = Number(fineAmount)
+
+      if (!Number.isFinite(charged) || charged < 0) {
+        toast.error('Fine must be a number of zero or more')
+        return
+      }
+
       const { fine } = await updateReservation(reservation.id, 'return', {
-        return_date: returnDate
+        return_date: returnDate,
+        fine_amount: charged,
+        fine_paid: finePaid
       })
 
       if (fine?.amount > 0) {
         toast.success(
-          `Returned ${fine.days} day(s) late. Fine due: ${formatMoney(fine.amount, settings)}`,
+          `Book returned. Fine ${formatMoney(fine.amount, settings)} recorded as ${fine.paid ? 'paid' : 'unpaid'}.`,
           { duration: 6000 }
         )
       } else {
-        toast.success('Book returned on time. No fine due.')
+        toast.success('Book returned. No fine recorded.')
       }
 
       setShowReturnModal(false)
@@ -526,40 +522,22 @@ export default function ReservationsPage() {
                     </div>
                     <div className="flex gap-1">
                       {reservation.status === 'pending' && (
-                        <>
-                          <button
-                            onClick={() => openConfirmModal(reservation)}
-                            className="p-1.5 bg-green-500 text-white rounded-lg border border-green-700"
-                            title="Confirm"
-                          >
-                            <CheckCircle className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => openDeleteModal(reservation)}
-                            className="p-1.5 bg-red-500 text-white rounded-lg border border-red-700"
-                            title="Delete"
-                          >
-                            <XCircle className="w-4 h-4" />
-                          </button>
-                        </>
+                        <button
+                          onClick={() => openConfirmModal(reservation)}
+                          className="p-1.5 bg-green-500 text-white rounded-lg border border-green-700"
+                          title="Confirm"
+                        >
+                          <CheckCircle className="w-4 h-4" />
+                        </button>
                       )}
                       {reservation.status === 'confirmed' && (
-                        <>
-                          <button
-                            onClick={() => openReturnModal(reservation)}
-                            className="p-1.5 bg-[#002147] text-white rounded-lg border border-[#fe9800]"
-                            title="Mark as Returned"
-                          >
-                            <Undo2 className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => openDeleteModal(reservation)}
-                            className="p-1.5 bg-red-500 text-white rounded-lg border border-red-700"
-                            title="Delete"
-                          >
-                            <XCircle className="w-4 h-4" />
-                          </button>
-                        </>
+                        <button
+                          onClick={() => openReturnModal(reservation)}
+                          className="p-1.5 bg-[#002147] text-white rounded-lg border border-[#fe9800]"
+                          title="Mark as Returned"
+                        >
+                          <Undo2 className="w-4 h-4" />
+                        </button>
                       )}
                     </div>
                   </div>
@@ -747,40 +725,22 @@ export default function ReservationsPage() {
                       <td className="px-3 py-2">
                         <div className="flex gap-1 justify-center">
                           {reservation.status === 'pending' && (
-                            <>
-                              <button
-                                onClick={() => openConfirmModal(reservation)}
-                                className="p-1.5 bg-green-500 text-white rounded hover:bg-green-600 transition-colors border border-green-700"
-                                title="Confirm Reservation"
-                              >
-                                <CheckCircle className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => openDeleteModal(reservation)}
-                                className="p-1.5 bg-red-500 text-white rounded hover:bg-red-600 transition-colors border border-red-700"
-                                title="Delete Reservation"
-                              >
-                                <XCircle className="w-3.5 h-3.5" />
-                              </button>
-                            </>
+                            <button
+                              onClick={() => openConfirmModal(reservation)}
+                              className="p-1.5 bg-green-500 text-white rounded hover:bg-green-600 transition-colors border border-green-700"
+                              title="Confirm Reservation"
+                            >
+                              <CheckCircle className="w-3.5 h-3.5" />
+                            </button>
                           )}
                           {reservation.status === 'confirmed' && (
-                            <>
-                              <button
-                                onClick={() => openReturnModal(reservation)}
-                                className="p-1.5 bg-[#002147] text-white rounded hover:bg-[#00335f] transition-colors border border-[#fe9800]"
-                                title="Mark as Returned"
-                              >
-                                <Undo2 className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => openDeleteModal(reservation)}
-                                className="p-1.5 bg-red-500 text-white rounded hover:bg-red-600 transition-colors border border-red-700"
-                                title="Delete Reservation"
-                              >
-                                <XCircle className="w-3.5 h-3.5" />
-                              </button>
-                            </>
+                            <button
+                              onClick={() => openReturnModal(reservation)}
+                              className="p-1.5 bg-[#002147] text-white rounded hover:bg-[#00335f] transition-colors border border-[#fe9800]"
+                              title="Mark as Returned"
+                            >
+                              <Undo2 className="w-3.5 h-3.5" />
+                            </button>
                           )}
                         </div>
                       </td>
@@ -921,46 +881,6 @@ export default function ReservationsPage() {
         </div>
       )}
 
-      {/* Delete Modal */}
-      {showDeleteModal && selectedReservation && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-md w-full border-2 border-red-500 shadow-2xl">
-            <div className="p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center border-2 border-red-500">
-                  <AlertTriangle className="w-6 h-6 text-red-600" />
-                </div>
-                <h3 className="text-xl font-bold text-[#002147]">Delete Reservation</h3>
-              </div>
-              <p className="text-gray-600 mb-4">
-                Are you sure you want to delete this reservation? This action cannot be undone.
-              </p>
-              <div className="bg-gray-50 p-4 rounded-lg mb-4 border-2 border-gray-200">
-                <p className="text-sm font-semibold text-[#002147]">{selectedReservation.reserver_name}</p>
-                <p className="text-sm text-gray-600">{selectedReservation.book_name}</p>
-              </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    setShowDeleteModal(false)
-                    setSelectedReservation(null)
-                  }}
-                  className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium border-2 border-gray-400"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => handleDelete(selectedReservation)}
-                  className="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-medium border-2 border-red-700"
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Search & Reserve Modal */}
       {showReserveModal && (
         <ReserveBookModal
@@ -973,6 +893,8 @@ export default function ReservationsPage() {
       {/* Return Modal */}
       {showReturnModal && selectedReservation && (() => {
         const fine = calculateFine(selectedReservation.due_date, returnDate, settings)
+        const charged = Number(fineAmount)
+        const chargedValid = Number.isFinite(charged) && charged >= 0
         return (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg max-w-md w-full border-2 border-[#fe9800] shadow-2xl">
@@ -1004,7 +926,15 @@ export default function ReservationsPage() {
                   <input
                     type="date"
                     value={returnDate}
-                    onChange={(e) => setReturnDate(e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      setReturnDate(value)
+
+                      // Re-suggest the fine for the new date; it stays editable.
+                      const owed = calculateFine(selectedReservation.due_date, value, settings)
+                      setFineAmount(String(owed.amount))
+                      setFinePaid(owed.amount === 0)
+                    }}
                     className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg bg-gray-50 text-gray-900 text-sm focus:ring-2 focus:ring-[#fe9800] focus:border-[#fe9800] outline-none"
                   />
                 </div>
@@ -1013,7 +943,7 @@ export default function ReservationsPage() {
                   {fine.amount > 0 ? (
                     <>
                       <p className="text-sm font-bold text-red-800">
-                        Fine due: {formatMoney(fine.amount, settings)}
+                        Calculated fine: {formatMoney(fine.amount, settings)}
                       </p>
                       <p className="text-xs text-red-700 mt-0.5">
                         {fine.days} day(s) late &times; {formatMoney(settings.fine_per_day, settings)} per day
@@ -1022,6 +952,60 @@ export default function ReservationsPage() {
                   ) : (
                     <p className="text-sm font-bold text-green-800">Returned on time — no fine due.</p>
                   )}
+                </div>
+
+                {/* Fine actually charged at the counter */}
+                <div className="bg-white border-2 border-[#fe9800] rounded-lg p-3 mb-4">
+                  <p className="text-xs font-bold text-[#002147] uppercase tracking-wide mb-2">
+                    Record Fine
+                  </p>
+
+                  <label className="block text-[10px] font-bold text-gray-600 uppercase mb-1">
+                    Fine Charged ({settings.currency})
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={fineAmount}
+                      onChange={(e) => setFineAmount(e.target.value)}
+                      className="flex-1 px-3 py-2 border-2 border-gray-200 rounded-lg bg-gray-50 text-gray-900 text-sm focus:ring-2 focus:ring-[#fe9800] focus:border-[#fe9800] outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFineAmount('0')
+                        setFinePaid(true)
+                      }}
+                      className="px-3 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-xs font-bold border-2 border-gray-400 whitespace-nowrap"
+                      title="Charge nothing for this return"
+                    >
+                      Waive
+                    </button>
+                  </div>
+                  {!chargedValid && (
+                    <p className="text-[10px] text-red-600 font-semibold mt-1">
+                      Enter an amount of zero or more.
+                    </p>
+                  )}
+
+                  <label className={`flex items-center gap-2 mt-3 ${chargedValid && charged > 0 ? 'cursor-pointer' : 'opacity-60'}`}>
+                    <input
+                      type="checkbox"
+                      checked={chargedValid && charged === 0 ? true : finePaid}
+                      disabled={!chargedValid || charged === 0}
+                      onChange={(e) => setFinePaid(e.target.checked)}
+                      className="w-4 h-4 accent-[#fe9800]"
+                    />
+                    <span className="text-xs font-semibold text-[#002147]">
+                      Fine collected now
+                    </span>
+                  </label>
+                  <p className="text-[10px] text-gray-500 mt-1">
+                    Leave it unticked to record the fine as outstanding — it stays on the
+                    borrower&apos;s record until it is paid.
+                  </p>
                 </div>
 
                 <div className="flex gap-3">
@@ -1036,7 +1020,8 @@ export default function ReservationsPage() {
                   </button>
                   <button
                     onClick={() => handleReturn(selectedReservation)}
-                    className="flex-1 px-4 py-2 bg-[#002147] text-white rounded-lg hover:bg-[#00335f] transition-colors font-medium border-2 border-[#fe9800]"
+                    disabled={!chargedValid}
+                    className="flex-1 px-4 py-2 bg-[#002147] text-white rounded-lg hover:bg-[#00335f] transition-colors font-medium border-2 border-[#fe9800] disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Confirm Return
                   </button>

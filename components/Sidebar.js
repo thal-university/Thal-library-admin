@@ -16,6 +16,7 @@ import {
   X,
   BookMarked,
   FileSearch,
+  Wallet,
 } from "lucide-react";
 
 export default function Sidebar() {
@@ -28,7 +29,8 @@ export default function Sidebar() {
     { name: "Books", href: "/dashboard/books", icon: Library },
     { name: "Reservations", href: "/dashboard/reservations", icon: BookMarked },
     { name: "Completed", href: "/dashboard/completed-reservations", icon: BookMarked },
-    { name: "Records", href: "/dashboard/records", icon: FileSearch },
+    { name: "Overall Record", href: "/dashboard/records", icon: FileSearch },
+    { name: "Fine Records", href: "/dashboard/fines", icon: Wallet },
     { name: 'Settings', href: '/dashboard/settings', icon: Settings },
   ];
 

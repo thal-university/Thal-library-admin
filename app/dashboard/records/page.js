@@ -183,7 +183,7 @@ export default function RecordsPage() {
   return (
     <div className="h-screen overflow-hidden bg-white flex flex-col">
       <Toaster position="top-right" />
-      <Header title="Complete Record" />
+      <Header title="Overall Record" />
 
       <div className="flex-1 overflow-y-auto p-2 sm:p-3 space-y-2">
         {/* Search Panel */}
