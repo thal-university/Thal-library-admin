@@ -1,62 +1,98 @@
-// ===== components/Header.js =====
 'use client'
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { LogOut, User } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
+import { ChevronDown, ChevronRight, LogOut, Menu, Settings } from 'lucide-react'
+import { Avatar } from '@/components/Sidebar'
+import { cn } from '@/lib/utils'
 
-export default function Header({ title }) {
-  const router = useRouter()
-  const [userName, setUserName] = useState('Admin')
-
-  useEffect(() => {
-    // Get user info from localStorage
-    const userSession = localStorage.getItem('library_user')
-    if (userSession) {
-      const user = JSON.parse(userSession)
-      setUserName(user.name || 'Admin')
-    }
-  }, [])
-
-  const handleLogout = async () => {
-    // Clear the signed session cookie, then the cached display name
-    try {
-      await fetch('/api/auth/logout', { method: 'POST' })
-    } catch (error) {
-      console.error('Logout request failed:', error)
-    }
-    localStorage.removeItem('library_user')
-    router.push('/')
-  }
-
+export default function Header({ title, user, onMenu, onLogout }) {
   return (
-    <header className="bg-white border-b-2 border-[#fe9800] px-3 sm:px-5 py-3 sm:py-3.5 shadow-md">
-      <div className="flex items-center justify-between gap-2">
-        <div className="min-w-0 flex-shrink ml-12 lg:ml-0">
-          <h1 className="text-base sm:text-xl font-bold text-[#002147] font-serif truncate">{title}</h1>
-          <p className="text-xs text-gray-600 font-medium hidden sm:block">Welcome back, {userName}</p>
-        </div>
+    <header data-print-hide className="glass z-30 flex h-12 shrink-0 items-center gap-2 rounded-[16px] px-2.5 sm:gap-3 sm:px-3">
+      <button
+        onClick={onMenu}
+        className="grid size-9 place-items-center rounded-xl text-ink-soft transition-colors hover:bg-surface/80 lg:hidden"
+        aria-label="Open menu"
+      >
+        <Menu className="size-5" />
+      </button>
 
-        <div className="flex items-center gap-1.5 sm:gap-3 flex-shrink-0">
-          <div className="hidden md:flex items-center gap-2.5 bg-gray-50 px-3 py-2 rounded-lg border-2 border-[#fe9800]">
-            <div className="w-9 h-9 bg-[#fe9800] rounded-full flex items-center justify-center shadow-md">
-              <User className="w-4 h-4 text-white" />
-            </div>
-            <div>
-              <p className="text-sm font-bold text-[#002147]">{userName}</p>
-              <p className="text-xs text-gray-600">Administrator</p>
-            </div>
-          </div>
+      <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 pl-1 text-[13px]">
+        <span className="hidden text-ink-muted sm:inline">Library</span>
+        <ChevronRight className="hidden size-3.5 text-ink-muted/60 sm:block" aria-hidden="true" />
+        <span className="truncate font-semibold text-ink">{title}</span>
+      </nav>
 
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3.5 py-2 bg-[#002147] text-white rounded-lg hover:shadow-lg hover:scale-105 transition-all font-bold text-sm"
-            title="Logout"
-          >
-            <LogOut className="w-4 h-4" />
-            <span className="hidden sm:inline">Logout</span>
-          </button>
-        </div>
+      <div className="ml-auto flex items-center gap-1.5">
+        <UserMenu user={user} onLogout={onLogout} />
       </div>
     </header>
+  )
+}
+
+function UserMenu({ user, onLogout }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onClick = (e) => !ref.current?.contains(e.target) && setOpen(false)
+    const onKey = (e) => e.key === 'Escape' && setOpen(false)
+    document.addEventListener('mousedown', onClick)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onClick)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-2.5 rounded-xl p-1 transition-colors hover:bg-surface/80 sm:pr-2"
+        aria-haspopup="menu"
+        aria-expanded={open}
+      >
+        <Avatar name={user.name} />
+        <span className="hidden text-left sm:block">
+          <span className="block text-[13px] font-semibold leading-tight text-ink">{user.name}</span>
+          <span className="block text-[11px] leading-tight text-ink-muted">Administrator</span>
+        </span>
+        <ChevronDown
+          className={cn('hidden size-4 text-ink-muted transition-transform duration-300 ease-spring sm:block', open && 'rotate-180')}
+          aria-hidden="true"
+        />
+      </button>
+
+      {open ? (
+        <div className="absolute right-0 z-40 mt-2 w-56">
+          <div role="menu" className="glass-strong rise rounded-2xl p-1.5">
+            <div className="flex items-center gap-2.5 border-b border-glass-line px-2.5 pt-1.5 pb-2.5">
+              <Avatar name={user.name} size="sm" />
+              <div className="min-w-0">
+                <p className="truncate text-[13px] font-semibold text-ink">{user.name}</p>
+                <p className="truncate text-[11px] text-ink-muted">{user.username ? `@${user.username}` : 'Administrator'}</p>
+              </div>
+            </div>
+            <Link
+              role="menuitem"
+              href="/dashboard/settings"
+              onClick={() => setOpen(false)}
+              className="mt-1 flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-[13px] text-ink-soft transition-colors hover:bg-surface hover:text-ink"
+            >
+              <Settings className="size-4" aria-hidden="true" /> Settings
+            </Link>
+            <button
+              role="menuitem"
+              type="button"
+              onClick={onLogout}
+              className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-[13px] text-ink-soft transition-colors hover:bg-surface hover:text-danger"
+            >
+              <LogOut className="size-4" aria-hidden="true" /> Sign out
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
   )
 }

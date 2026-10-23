@@ -4,6 +4,8 @@ import { supabase } from '@/lib/supabase'
 import { createReservation, searchPeople, formatMoney, today } from '@/lib/librarySettings'
 import { Search, X, BookOpen, CheckCircle, CalendarDays, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { Pill, ui } from '@/components/ui/glass'
+import { cn } from '@/lib/utils'
 
 /**
  * Admin "Search & Reserve" drawer.
@@ -170,254 +172,265 @@ export default function ReserveBookModal({ settings, onClose, onCreated }) {
     }
   }
 
+  const stepTitle = 'mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-soft'
+  const stepNum = 'grid size-5 place-items-center rounded-md bg-brand-500/12 text-[10.5px] font-bold text-brand-700'
+
   return (
     <div
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-end"
+      className="fixed inset-0 z-50 flex items-center justify-end p-2 sm:p-3"
       onClick={onClose}
     >
+      <div className="fade-in absolute inset-0 bg-navy-900/30 backdrop-blur-[3px]" />
       <div
-        className="bg-white h-full w-full max-w-lg shadow-2xl border-l-2 border-[#fe9800] overflow-y-auto"
+        className="glass-strong pop-in relative flex h-full w-full max-w-lg flex-col overflow-hidden rounded-[22px]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="bg-[#002147] px-5 py-4 sticky top-0 z-10 border-b-2 border-[#fe9800] flex items-center justify-between">
-          <h2 className="text-xl font-bold text-white font-serif flex items-center gap-2">
-            <BookOpen className="w-6 h-6" />
-            Search &amp; Reserve
-          </h2>
-          <button onClick={onClose} className="p-1.5 text-white hover:text-[#fe9800]">
-            <X className="w-5 h-5" />
+        <div className="flex items-center gap-3 border-b border-glass-line px-5 py-3.5">
+          <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-brand-500/10 text-brand-600">
+            <BookOpen className="size-[18px]" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-[15px] font-semibold text-heading">Search &amp; Reserve</h2>
+            <p className="mt-0.5 text-[12px] text-ink-muted">Pick a book, a borrower and the loan period</p>
+          </div>
+          <button type="button" onClick={onClose} className={ui.iconBtn} aria-label="Close">
+            <X className="size-4" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 space-y-5">
-          {/* Step 1 - book */}
-          <section>
-            <h3 className="text-xs font-bold text-[#002147] uppercase tracking-wide mb-2">
-              1. Choose a book
-            </h3>
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <div className="scroll-quiet min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
+            {/* Step 1 - book */}
+            <section>
+              <h3 className={stepTitle}>
+                <span className={stepNum}>1</span>
+                Choose a book
+              </h3>
 
-            {selectedBook ? (
-              <div className="bg-gray-50 rounded-lg p-3 border-2 border-[#002147]">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-sm font-bold text-[#002147]">{selectedBook.name}</p>
-                    <p className="text-xs text-gray-600">{selectedBook.author || 'Unknown author'}</p>
-                    <p className="text-[11px] text-gray-500 mt-1">
-                      SR: {selectedBook.sr_no || 'N/A'} &middot; ID: {selectedBook.book_id}
-                      {selectedBook.department ? ` · ${selectedBook.department}` : ''}
-                    </p>
+              {selectedBook ? (
+                <div className="rounded-xl border border-brand-500/25 bg-brand-500/[0.05] p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-[13px] font-semibold text-ink">{selectedBook.name}</p>
+                      <p className="text-[12px] text-ink-soft">{selectedBook.author || 'Unknown author'}</p>
+                      <p className="mt-1 text-[11px] text-ink-muted">
+                        SR: {selectedBook.sr_no || 'N/A'} &middot; ID: {selectedBook.book_id}
+                        {selectedBook.department ? ` · ${selectedBook.department}` : ''}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { setSelectedBook(null); setBookResults([]); setBookQuery('') }}
+                      className="whitespace-nowrap rounded-lg px-2 py-1 text-[12px] font-semibold text-brand-600 transition hover:bg-brand-500/10 hover:text-brand-700"
+                    >
+                      Change
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => { setSelectedBook(null); setBookResults([]); setBookQuery('') }}
-                    className="text-xs font-bold text-[#fe9800] hover:text-[#002147] whitespace-nowrap"
-                  >
-                    Change
-                  </button>
                 </div>
-              </div>
-            ) : (
-              <>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#fe9800]" />
-                  <input
-                    type="text"
-                    value={bookQuery}
-                    onChange={(e) => setBookQuery(e.target.value)}
-                    placeholder="Search by title, author, SR no or book ID"
-                    className="w-full pl-9 pr-9 py-2.5 border-2 border-gray-200 rounded-lg bg-gray-50 text-gray-900 text-sm focus:ring-2 focus:ring-[#fe9800] focus:border-[#fe9800] outline-none"
-                  />
-                  {searchingBooks && (
-                    <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#fe9800] animate-spin" />
-                  )}
-                </div>
+              ) : (
+                <>
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-muted" />
+                    <input
+                      type="text"
+                      value={bookQuery}
+                      onChange={(e) => setBookQuery(e.target.value)}
+                      placeholder="Search by title, author, SR no or book ID"
+                      className={cn(ui.input, 'pl-9 pr-9')}
+                    />
+                    {searchingBooks && (
+                      <Loader2 className="absolute right-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-brand-500" />
+                    )}
+                  </div>
 
-                {bookResults.length > 0 && (
-                  <div className="mt-2 border-2 border-gray-200 rounded-lg divide-y divide-gray-100 max-h-56 overflow-y-auto">
-                    {bookResults.map(book => {
-                      const available = book.status === 'Available'
-                      return (
-                        <button
-                          key={book.id}
-                          type="button"
-                          disabled={!available}
-                          onClick={() => { setSelectedBook(book); setBookResults([]) }}
-                          className={`w-full text-left px-3 py-2 transition-colors ${
-                            available ? 'hover:bg-gray-50' : 'opacity-50 cursor-not-allowed'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="min-w-0">
-                              <p className="text-sm font-semibold text-[#002147] truncate">{book.name}</p>
-                              <p className="text-[11px] text-gray-500 truncate">
-                                {book.author || 'Unknown'} &middot; SR: {book.sr_no || 'N/A'}
-                              </p>
+                  {bookResults.length > 0 && (
+                    <div className="scroll-quiet mt-2 max-h-56 divide-y divide-glass-line overflow-y-auto rounded-xl border border-glass-line bg-surface/60">
+                      {bookResults.map(book => {
+                        const available = book.status === 'Available'
+                        return (
+                          <button
+                            key={book.id}
+                            type="button"
+                            disabled={!available}
+                            onClick={() => { setSelectedBook(book); setBookResults([]) }}
+                            className={`w-full px-3 py-2 text-left transition-colors ${
+                              available ? 'hover:bg-surface' : 'cursor-not-allowed opacity-50'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="truncate text-[13px] font-semibold text-ink">{book.name}</p>
+                                <p className="truncate text-[11px] text-ink-muted">
+                                  {book.author || 'Unknown'} &middot; SR: {book.sr_no || 'N/A'}
+                                </p>
+                              </div>
+                              <Pill tone={available ? 'success' : 'danger'}>
+                                {available ? 'Available' : 'Allocated'}
+                              </Pill>
                             </div>
-                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap ${
-                              available ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                            }`}>
-                              {available ? 'Available' : 'Allocated'}
-                            </span>
-                          </div>
-                        </button>
-                      )
-                    })}
-                  </div>
-                )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
 
-                {bookQuery.trim().length >= 2 && !searchingBooks && bookResults.length === 0 && (
-                  <p className="text-xs text-gray-500 mt-2">No books match &ldquo;{bookQuery}&rdquo;</p>
-                )}
-              </>
-            )}
-          </section>
-
-          {/* Step 2 - borrower */}
-          <section>
-            <h3 className="text-xs font-bold text-[#002147] uppercase tracking-wide mb-2">
-              2. Choose the borrower
-            </h3>
-
-            <div className="grid grid-cols-2 gap-2 mb-3">
-              {['student', 'teacher'].map(option => (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => {
-                    setRole(option)
-                    setPersonResults([])
-                    setPersonQuery('')
-                    setReserver({ id: null, reserver_id: '', reserver_name: '' })
-                  }}
-                  className={`px-3 py-2 rounded-lg font-bold text-sm border-2 transition-all ${
-                    role === option
-                      ? 'bg-[#fe9800] text-white border-[#002147]'
-                      : 'bg-white text-[#002147] border-[#002147] hover:bg-gray-50'
-                  }`}
-                >
-                  {option === 'student' ? 'Student' : 'Teacher'}
-                </button>
-              ))}
-            </div>
-
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#fe9800]" />
-              <input
-                type="text"
-                value={personQuery}
-                onChange={(e) => setPersonQuery(e.target.value)}
-                placeholder={role === 'student' ? 'Search by roll number or name' : 'Search by teacher name'}
-                className="w-full pl-9 pr-9 py-2.5 border-2 border-gray-200 rounded-lg bg-gray-50 text-gray-900 text-sm focus:ring-2 focus:ring-[#fe9800] focus:border-[#fe9800] outline-none"
-              />
-              {searchingPeople && (
-                <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#fe9800] animate-spin" />
+                  {bookQuery.trim().length >= 2 && !searchingBooks && bookResults.length === 0 && (
+                    <p className="mt-2 text-[12px] text-ink-muted">No books match &ldquo;{bookQuery}&rdquo;</p>
+                  )}
+                </>
               )}
-            </div>
+            </section>
 
-            {personResults.length > 0 && (
-              <div className="mt-2 border-2 border-gray-200 rounded-lg divide-y divide-gray-100 max-h-48 overflow-y-auto">
-                {personResults.map(person => (
+            {/* Step 2 - borrower */}
+            <section>
+              <h3 className={stepTitle}>
+                <span className={stepNum}>2</span>
+                Choose the borrower
+              </h3>
+
+              <div className="mb-3 grid grid-cols-2 gap-0.5 rounded-xl border border-edge/70 bg-slate-500/[0.06] p-1">
+                {['student', 'teacher'].map(option => (
                   <button
-                    key={`${person.id || person.key}-${person.reserver_id}`}
+                    key={option}
                     type="button"
-                    onClick={() => pickPerson(person)}
-                    className="w-full text-left px-3 py-2 hover:bg-gray-50 transition-colors"
+                    onClick={() => {
+                      setRole(option)
+                      setPersonResults([])
+                      setPersonQuery('')
+                      setReserver({ id: null, reserver_id: '', reserver_name: '' })
+                    }}
+                    className={cn(
+                      'h-7 rounded-lg text-[12px] font-semibold transition',
+                      role === option
+                        ? 'bg-surface text-ink shadow-[0_2px_8px_-3px_rgba(30,50,90,0.3)]'
+                        : 'text-ink-muted hover:text-ink'
+                    )}
                   >
-                    <p className="text-sm font-semibold text-[#002147] truncate">{person.label}</p>
-                    <p className="text-[11px] text-gray-500 truncate">{person.sub}</p>
+                    {option === 'student' ? 'Student' : 'Teacher'}
                   </button>
                 ))}
               </div>
-            )}
 
-            {/* Always editable, so a walk-in with no profile can still be served */}
-            <div className="grid grid-cols-2 gap-3 mt-3">
-              <div>
-                <label className="block text-[10px] font-bold text-gray-600 uppercase mb-1">
-                  Borrower Name *
-                </label>
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-muted" />
                 <input
                   type="text"
-                  required
-                  value={reserver.reserver_name}
-                  onChange={(e) => setReserver({ ...reserver, reserver_name: e.target.value, id: null })}
-                  className="w-full px-2 py-2 border-2 border-gray-200 rounded-lg bg-gray-50 text-gray-900 text-sm focus:ring-2 focus:ring-[#fe9800] focus:border-[#fe9800] outline-none"
-                  placeholder="Full name"
+                  value={personQuery}
+                  onChange={(e) => setPersonQuery(e.target.value)}
+                  placeholder={role === 'student' ? 'Search by roll number or name' : 'Search by teacher name'}
+                  className={cn(ui.input, 'pl-9 pr-9')}
                 />
+                {searchingPeople && (
+                  <Loader2 className="absolute right-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-brand-500" />
+                )}
               </div>
-              <div>
-                <label className="block text-[10px] font-bold text-gray-600 uppercase mb-1">
-                  {role === 'student' ? 'Roll Number *' : 'Teacher ID / Email *'}
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={reserver.reserver_id}
-                  onChange={(e) => setReserver({ ...reserver, reserver_id: e.target.value, id: null })}
-                  className="w-full px-2 py-2 border-2 border-gray-200 rounded-lg bg-gray-50 text-gray-900 text-sm focus:ring-2 focus:ring-[#fe9800] focus:border-[#fe9800] outline-none"
-                  placeholder={role === 'student' ? '2021-CS-045' : 'name@thal.edu.pk'}
-                />
-              </div>
-            </div>
-          </section>
 
-          {/* Step 3 - dates */}
-          <section>
-            <h3 className="text-xs font-bold text-[#002147] uppercase tracking-wide mb-2 flex items-center gap-1.5">
-              <CalendarDays className="w-4 h-4 text-[#fe9800]" />
-              3. Loan period
-            </h3>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[10px] font-bold text-gray-600 uppercase mb-1">Issue Date *</label>
-                <input
-                  type="date"
-                  required
-                  value={issueDate}
-                  onChange={(e) => setIssueDate(e.target.value)}
-                  className="w-full px-2 py-2 border-2 border-gray-200 rounded-lg bg-gray-50 text-gray-900 text-sm focus:ring-2 focus:ring-[#fe9800] focus:border-[#fe9800] outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold text-gray-600 uppercase mb-1">Due Date *</label>
-                <input
-                  type="date"
-                  required
-                  min={issueDate || undefined}
-                  value={dueDate}
-                  onChange={(e) => setDueDate(e.target.value)}
-                  className="w-full px-2 py-2 border-2 border-gray-200 rounded-lg bg-gray-50 text-gray-900 text-sm focus:ring-2 focus:ring-[#fe9800] focus:border-[#fe9800] outline-none"
-                />
-              </div>
-            </div>
-            <p className="text-[10px] text-gray-500 mt-2">
-              Pick when the book is due back. Every day past it is fined{' '}
-              <span className="font-bold text-[#002147]">{formatMoney(settings.fine_per_day, settings)}</span>.
-            </p>
-          </section>
+              {personResults.length > 0 && (
+                <div className="scroll-quiet mt-2 max-h-48 divide-y divide-glass-line overflow-y-auto rounded-xl border border-glass-line bg-surface/60">
+                  {personResults.map(person => (
+                    <button
+                      key={`${person.id || person.key}-${person.reserver_id}`}
+                      type="button"
+                      onClick={() => pickPerson(person)}
+                      className="w-full px-3 py-2 text-left transition-colors hover:bg-surface"
+                    >
+                      <p className="truncate text-[13px] font-semibold text-ink">{person.label}</p>
+                      <p className="truncate text-[11px] text-ink-muted">{person.sub}</p>
+                    </button>
+                  ))}
+                </div>
+              )}
 
-          <div className="flex gap-3 pt-4 border-t-2 border-[#002147]">
+              {/* Always editable, so a walk-in with no profile can still be served */}
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <div>
+                  <label className={ui.label}>
+                    Borrower Name *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={reserver.reserver_name}
+                    onChange={(e) => setReserver({ ...reserver, reserver_name: e.target.value, id: null })}
+                    className={ui.input}
+                    placeholder="Full name"
+                  />
+                </div>
+                <div>
+                  <label className={ui.label}>
+                    {role === 'student' ? 'Roll Number *' : 'Teacher ID / Email *'}
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={reserver.reserver_id}
+                    onChange={(e) => setReserver({ ...reserver, reserver_id: e.target.value, id: null })}
+                    className={ui.input}
+                    placeholder={role === 'student' ? '2021-CS-045' : 'name@thal.edu.pk'}
+                  />
+                </div>
+              </div>
+            </section>
+
+            {/* Step 3 - dates */}
+            <section>
+              <h3 className={stepTitle}>
+                <span className={stepNum}>3</span>
+                <CalendarDays className="size-4 text-brand-500" />
+                Loan period
+              </h3>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={ui.label}>Issue Date *</label>
+                  <input
+                    type="date"
+                    required
+                    value={issueDate}
+                    onChange={(e) => setIssueDate(e.target.value)}
+                    className={ui.input}
+                  />
+                </div>
+                <div>
+                  <label className={ui.label}>Due Date *</label>
+                  <input
+                    type="date"
+                    required
+                    min={issueDate || undefined}
+                    value={dueDate}
+                    onChange={(e) => setDueDate(e.target.value)}
+                    className={ui.input}
+                  />
+                </div>
+              </div>
+              <p className="mt-2 text-[11px] text-ink-muted">
+                Pick when the book is due back. Every day past it is fined{' '}
+                <span className="font-semibold text-ink">{formatMoney(settings.fine_per_day, settings)}</span>.
+              </p>
+            </section>
+          </div>
+
+          <div className="flex gap-2 border-t border-glass-line px-5 py-3">
             <button
               type="button"
               onClick={onClose}
               disabled={saving}
-              className="flex-1 px-4 py-3 border-2 border-[#002147] text-[#002147] rounded-lg hover:bg-gray-100 transition-all font-bold disabled:opacity-50"
+              className={cn(ui.btnSecondary, 'flex-1')}
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={saving || !selectedBook}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-[#fe9800] text-white rounded-lg hover:shadow-xl transition-all font-bold border-2 border-[#002147] disabled:opacity-50 disabled:cursor-not-allowed"
+              className={cn(ui.btnPrimary, 'flex-1')}
             >
               {saving ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <Loader2 className="size-4 animate-spin" />
                   Reserving...
                 </>
               ) : (
                 <>
-                  <CheckCircle className="w-4 h-4" />
+                  <CheckCircle className="size-4" />
                   Reserve Book
                 </>
               )}

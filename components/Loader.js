@@ -1,19 +1,21 @@
 'use client'
-import { useEffect, useState } from 'react'
+import Image from 'next/image'
 
-export default function Loader() {
+// Emblem inside a spinning brand ring, on a frosted card.
+// Full-screen by default; `inline` fills the dashboard content area instead.
+export default function Loader({ label = 'Loading library…', inline = false }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-white dark:bg-gray-900">
-      <div className="text-center">
-        <div className="relative w-24 h-24 mx-auto mb-6">
-          <div className="absolute inset-0 border-4 border-gray-200 dark:border-gray-700 rounded-full"></div>
-          <div className="absolute inset-0 border-4 border-transparent border-t-[#fe9800] rounded-full animate-spin" style={{ animationDuration: '0.8s' }}></div>
-          <div className="absolute inset-2 border-4 border-transparent border-t-[#002147] rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.8s' }}></div>
+    <div className={inline ? 'flex flex-1 items-center justify-center' : 'fixed inset-0 z-50 flex items-center justify-center'}>
+      <div className="glass-strong pop-in flex flex-col items-center gap-3 rounded-3xl px-8 py-6">
+        <div className="relative grid size-16 place-items-center">
+          <span className="absolute inset-0 rounded-full border-[3px] border-ink/10" />
+          <span
+            className="absolute inset-0 animate-spin rounded-full border-[3px] border-transparent border-t-brand-500"
+            style={{ animationDuration: '0.8s' }}
+          />
+          <Image src="/tub-emblem.png" alt="" width={34} height={34} priority />
         </div>
-        <h2 className="text-2xl font-bold text-[#002147] dark:text-[#fe9800] mb-2 font-serif">
-          Thal University
-        </h2>
-        <p className="text-gray-600 dark:text-gray-400 font-medium">Loading Library System...</p>
+        <p className="text-[13px] font-medium text-ink-soft">{label}</p>
       </div>
     </div>
   )

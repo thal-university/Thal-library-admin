@@ -1,9 +1,8 @@
 'use client'
 import { useEffect, useState } from 'react'
-import Header from '@/components/Header'
 import Loader from '@/components/Loader'
-import { BookMarked, Search, X, CheckCircle, AlertTriangle, Filter, CalendarDays, Undo2, Plus } from 'lucide-react'
-import toast, { Toaster } from 'react-hot-toast'
+import { BookMarked, Search, X, CheckCircle, AlertTriangle, Filter, CalendarDays, Undo2, Plus, Clock } from 'lucide-react'
+import toast from 'react-hot-toast'
 import {
   getLibrarySettings,
   fetchReservationsList,
@@ -15,6 +14,34 @@ import {
   today
 } from '@/lib/librarySettings'
 import ReserveBookModal from '@/components/ReserveBookModal'
+import { GlassCard, EmptyState, Pill, StatCard, ui } from '@/components/ui/glass'
+import Select from '@/components/ui/Select'
+import { cn } from '@/lib/utils'
+
+const ROLE_OPTIONS = [['all', 'All Roles'], ['student', 'Students'], ['teacher', 'Teachers']]
+
+// Pill tone per stored reservation status
+const STATUS_TONE = {
+  pending: 'warning',
+  confirmed: 'info',
+  issued: 'info',
+  returned: 'success',
+  completed: 'success',
+  rejected: 'danger',
+  cancelled: 'danger',
+  overdue: 'danger',
+  deleted: 'neutral',
+}
+
+// Segmented filter tab classes
+const tabClass = (active) =>
+  cn(
+    'inline-flex h-7 items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 text-[12px] font-semibold transition',
+    active ? 'bg-surface text-ink shadow-[0_2px_8px_-3px_rgba(30,50,90,0.3)]' : 'text-ink-muted hover:text-ink'
+  )
+
+const countClass = (active) =>
+  cn('rounded-md px-1.5 text-[10.5px] tabular-nums', active ? 'bg-brand-500/12 text-brand-700' : 'bg-slate-500/10 text-ink-muted')
 
 export default function ReservationsPage() {
   const [loading, setLoading] = useState(true)
@@ -264,618 +291,551 @@ export default function ReservationsPage() {
   }
 
   if (loading) {
-    return <Loader />
+    return <Loader inline />
   }
 
   return (
-    <div className="h-screen overflow-hidden bg-white flex flex-col">
-      <Toaster position="top-right" />
-      <Header title="Reservation Requests" />
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      {/* KPIs */}
+      <div className="grid shrink-0 grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatCard index={0} icon={BookMarked} label="Active Reservations" value={stats.total} hint={`${stats.students} students · ${stats.teachers} teachers`} tone="brand" />
+        <StatCard index={1} icon={Clock} label="Pending" value={stats.pending} hint="Waiting for confirmation" tone="info" />
+        <StatCard index={2} icon={CheckCircle} label="Issued" value={stats.confirmed} hint="Books out with readers" tone="success" />
+        <StatCard index={3} icon={AlertTriangle} label="Overdue" value={stats.overdue} hint={stats.overdue > 0 ? 'Past due date, fine accruing' : 'Nothing overdue'} tone="danger" />
+      </div>
 
-      {/* Main Content */}
-      <div className="flex-1 overflow-y-auto p-2 sm:p-3 space-y-2">
-        {/* Search and Filters Bar */}
-        <div className="bg-white rounded-xl p-2 sm:p-3 border-2 border-[#fe9800] shadow-lg">
-          <div className="flex flex-col gap-2">
-            {/* Top Row: Search + Filter Icon (Mobile) / Full Layout (Desktop) */}
-            <div className="flex items-center gap-2">
-              {/* Search Bar */}
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-[#fe9800]" />
-                <input
-                  type="text"
-                  placeholder="Search reservations..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-9 py-2 border-2 border-gray-200 rounded-lg bg-gray-50 text-gray-800 placeholder-gray-500 focus:ring-2 focus:ring-[#fe9800] focus:border-[#fe9800] outline-none transition-all font-medium text-sm"
-                />
-                {searchQuery && (
-                  <button
-                    onClick={() => setSearchQuery('')}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[#fe9800] hover:text-[#002147]"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-
-              {/* Admin: search a book and reserve it directly */}
-              <button
-                onClick={() => setShowReserveModal(true)}
-                className="flex items-center gap-1.5 px-3 sm:px-4 py-2 bg-[#fe9800] text-white rounded-lg font-bold text-sm border-2 border-[#002147] hover:shadow-lg transition-all whitespace-nowrap"
-                title="Search a book and reserve it"
-              >
-                <Plus className="w-4 h-4" />
-                <span className="hidden sm:inline">Search &amp; Reserve</span>
-              </button>
-
-              {/* Mobile: Filter Icon */}
-              <button
-                onClick={() => setShowFilters(!showFilters)}
-                className={`md:hidden p-2 rounded-lg border-2 transition-all ${
-                  showFilters || filterStatus !== 'all' || filterRole !== 'all'
-                    ? 'bg-[#fe9800] text-white border-[#002147]'
-                    : 'bg-white text-[#002147] border-[#002147]'
-                }`}
-                title="Filters"
-              >
-                <Filter className="w-5 h-5" />
-              </button>
+      {/* Search and Filters Bar */}
+      <GlassCard index={4} className="relative z-10 p-2.5 sm:p-3">
+        <div className="flex flex-col gap-2">
+          {/* Top Row: Search + Filter Icon (Mobile) / Full Layout (Desktop) */}
+          <div className="flex items-center gap-2">
+            {/* Search Bar */}
+            <div className="relative min-w-0 flex-1 md:max-w-sm">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-muted" />
+              <input
+                type="text"
+                placeholder="Search reservations..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className={cn(ui.input, 'pl-9 pr-9')}
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded-md text-ink-muted transition hover:bg-surface hover:text-ink"
+                >
+                  <X className="size-3.5" />
+                </button>
+              )}
             </div>
 
             {/* Desktop: Always show filters inline */}
-            <div className="hidden md:flex flex-wrap items-center gap-2">
-              <button
-                onClick={() => setFilterStatus('all')}
-                className={`px-4 py-1.5 rounded-lg font-bold transition-all shadow-md text-sm border-2 ${
-                  filterStatus === 'all'
-                    ? 'bg-[#fe9800] text-white shadow-lg scale-105 border-[#002147]'
-                    : 'bg-white text-[#002147] border-[#002147] hover:bg-gray-50'
-                }`}
-              >
-                All ({stats.total})
-              </button>
-              <button
-                onClick={() => setFilterStatus('pending')}
-                className={`px-4 py-1.5 rounded-lg font-bold transition-all shadow-md text-sm border-2 ${
-                  filterStatus === 'pending'
-                    ? 'bg-yellow-500 text-white shadow-lg scale-105 border-yellow-700'
-                    : 'bg-white text-[#002147] border-[#002147] hover:bg-gray-50'
-                }`}
-              >
-                Pending ({stats.pending})
-              </button>
-              <button
-                onClick={() => setFilterStatus('confirmed')}
-                className={`px-4 py-1.5 rounded-lg font-bold transition-all shadow-md text-sm border-2 ${
-                  filterStatus === 'confirmed'
-                    ? 'bg-green-500 text-white shadow-lg scale-105 border-green-700'
-                    : 'bg-white text-[#002147] border-[#002147] hover:bg-gray-50'
-                }`}
-              >
-                Confirmed ({stats.confirmed})
-              </button>
-              <button
-                onClick={() => setFilterStatus('overdue')}
-                className={`px-4 py-1.5 rounded-lg font-bold transition-all shadow-md text-sm border-2 ${
-                  filterStatus === 'overdue'
-                    ? 'bg-red-600 text-white shadow-lg scale-105 border-red-800'
-                    : 'bg-white text-[#002147] border-[#002147] hover:bg-gray-50'
-                }`}
-              >
-                Overdue ({stats.overdue})
-              </button>
-              <select
+            <div className="hidden flex-1 flex-wrap items-center gap-2 md:flex">
+              <div className="flex items-center gap-0.5 rounded-xl border border-edge/70 bg-slate-500/[0.06] p-1">
+                <button onClick={() => setFilterStatus('all')} className={tabClass(filterStatus === 'all')}>
+                  All <span className={countClass(filterStatus === 'all')}>{stats.total}</span>
+                </button>
+                <button onClick={() => setFilterStatus('pending')} className={tabClass(filterStatus === 'pending')}>
+                  Pending <span className={countClass(filterStatus === 'pending')}>{stats.pending}</span>
+                </button>
+                <button onClick={() => setFilterStatus('confirmed')} className={tabClass(filterStatus === 'confirmed')}>
+                  Confirmed <span className={countClass(filterStatus === 'confirmed')}>{stats.confirmed}</span>
+                </button>
+                <button onClick={() => setFilterStatus('overdue')} className={tabClass(filterStatus === 'overdue')}>
+                  Overdue{' '}
+                  <span
+                    className={cn(
+                      'rounded-md px-1.5 text-[10.5px] tabular-nums',
+                      stats.overdue > 0 ? 'bg-rose-500/10 text-rose-700' : countClass(filterStatus === 'overdue')
+                    )}
+                  >
+                    {stats.overdue}
+                  </span>
+                </button>
+              </div>
+              <Select
+                label="Role"
                 value={filterRole}
-                onChange={(e) => setFilterRole(e.target.value)}
-                className="px-4 py-1.5 rounded-lg font-bold transition-all shadow-md text-sm border-2 border-[#002147] bg-white text-[#002147] hover:bg-gray-50 focus:ring-2 focus:ring-[#fe9800] focus:border-[#fe9800] outline-none"
-              >
-                <option value="all">All Roles</option>
-                <option value="student">Students</option>
-                <option value="teacher">Teachers</option>
-              </select>
+                onChange={setFilterRole}
+                options={ROLE_OPTIONS}
+              />
             </div>
 
-            {/* Mobile: Collapsible Filters */}
-            {showFilters && (
-              <div className="md:hidden flex flex-col gap-2 pt-2 border-t border-gray-200">
-                <div className="grid grid-cols-4 gap-1.5">
-                  <button
-                    onClick={() => setFilterStatus('all')}
-                    className={`px-2 py-2 rounded-lg font-bold transition-all text-xs border-2 ${
-                      filterStatus === 'all'
-                        ? 'bg-[#fe9800] text-white border-[#002147]'
-                        : 'bg-white text-[#002147] border-[#002147]'
-                    }`}
-                  >
-                    All ({stats.total})
-                  </button>
-                  <button
-                    onClick={() => setFilterStatus('pending')}
-                    className={`px-2 py-2 rounded-lg font-bold transition-all text-xs border-2 ${
-                      filterStatus === 'pending'
-                        ? 'bg-yellow-500 text-white border-yellow-700'
-                        : 'bg-white text-[#002147] border-[#002147]'
-                    }`}
-                  >
-                    Pend ({stats.pending})
-                  </button>
-                  <button
-                    onClick={() => setFilterStatus('confirmed')}
-                    className={`px-2 py-2 rounded-lg font-bold transition-all text-xs border-2 ${
-                      filterStatus === 'confirmed'
-                        ? 'bg-green-500 text-white border-green-700'
-                        : 'bg-white text-[#002147] border-[#002147]'
-                    }`}
-                  >
-                    Conf ({stats.confirmed})
-                  </button>
-                  <button
-                    onClick={() => setFilterStatus('overdue')}
-                    className={`px-2 py-2 rounded-lg font-bold transition-all text-xs border-2 ${
-                      filterStatus === 'overdue'
-                        ? 'bg-red-600 text-white border-red-800'
-                        : 'bg-white text-[#002147] border-[#002147]'
-                    }`}
-                  >
-                    Late ({stats.overdue})
-                  </button>
-                </div>
-                <select
-                  value={filterRole}
-                  onChange={(e) => setFilterRole(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg font-bold text-xs border-2 border-[#002147] bg-white text-[#002147] focus:ring-2 focus:ring-[#fe9800] focus:border-[#fe9800] outline-none"
-                >
-                  <option value="all">All Roles</option>
-                  <option value="student">Students</option>
-                  <option value="teacher">Teachers</option>
-                </select>
-              </div>
-            )}
+            {/* Admin: search a book and reserve it directly */}
+            <button
+              onClick={() => setShowReserveModal(true)}
+              className={cn(ui.btnPrimary, 'shrink-0')}
+              title="Search a book and reserve it"
+            >
+              <Plus className="size-4" />
+              <span className="hidden sm:inline">Search &amp; Reserve</span>
+            </button>
+
+            {/* Mobile: Filter Icon */}
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className={cn(
+                'grid size-9 shrink-0 place-items-center rounded-xl border transition md:hidden',
+                showFilters || filterStatus !== 'all' || filterRole !== 'all'
+                  ? 'border-brand-400 bg-brand-500/10 text-brand-600'
+                  : 'border-edge/90 bg-surface/70 text-ink-soft'
+              )}
+              title="Filters"
+            >
+              <Filter className="size-4" />
+            </button>
           </div>
+
+          {/* Mobile: Collapsible Filters */}
+          {showFilters && (
+            <div className="fade-in flex flex-col gap-2 border-t border-glass-line pt-2 md:hidden">
+              <div className="grid grid-cols-4 gap-0.5 rounded-xl border border-edge/70 bg-slate-500/[0.06] p-1">
+                <button onClick={() => setFilterStatus('all')} className={cn(tabClass(filterStatus === 'all'), 'justify-center px-1 text-[11px]')}>
+                  All ({stats.total})
+                </button>
+                <button onClick={() => setFilterStatus('pending')} className={cn(tabClass(filterStatus === 'pending'), 'justify-center px-1 text-[11px]')}>
+                  Pend ({stats.pending})
+                </button>
+                <button onClick={() => setFilterStatus('confirmed')} className={cn(tabClass(filterStatus === 'confirmed'), 'justify-center px-1 text-[11px]')}>
+                  Conf ({stats.confirmed})
+                </button>
+                <button onClick={() => setFilterStatus('overdue')} className={cn(tabClass(filterStatus === 'overdue'), 'justify-center px-1 text-[11px]')}>
+                  Late ({stats.overdue})
+                </button>
+              </div>
+              <Select
+                variant="field"
+                label="Role"
+                value={filterRole}
+                onChange={setFilterRole}
+                options={ROLE_OPTIONS}
+              />
+            </div>
+          )}
+        </div>
+      </GlassCard>
+
+      {/* Reservations Table */}
+      <GlassCard index={1} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="flex items-center gap-2 border-b border-glass-line px-3.5 py-2.5">
+          <span className="grid size-7 place-items-center rounded-lg bg-brand-500/10 text-brand-600">
+            <BookMarked className="size-4" />
+          </span>
+          <h3 className="text-[13px] font-semibold text-ink">Reservation Requests</h3>
         </div>
 
-        {/* Reservations Table */}
-        <div className="bg-white rounded-xl border-2 border-[#fe9800] overflow-hidden shadow-xl flex-1 flex flex-col">
-          <div className="bg-[#002147] px-3 py-1.5 border-b-2 border-[#fe9800]">
-            <h3 className="text-sm font-bold text-white font-serif flex items-center gap-1.5">
-              <BookMarked className="w-4 h-4" />
-              Reservation Requests
-            </h3>
-          </div>
-
-          {/* Mobile Card View */}
-          <div className="md:hidden overflow-y-auto flex-1 p-2 space-y-1.5">
-            {filteredReservations.length === 0 ? (
-              <div className="flex flex-col items-center py-6">
-                <div className="w-12 h-14 bg-[#fe9800] rounded shadow-lg flex items-center justify-center mb-2 border-2 border-[#002147]">
-                  <BookMarked className="w-5 h-5 text-white" />
-                </div>
-                <p className="text-[#002147] text-sm font-serif font-medium text-center">
-                  No reservations found
-                </p>
-                <p className="text-gray-600 text-xs mt-1 text-center">
-                  Try adjusting your filters
-                </p>
-              </div>
-            ) : (
-              filteredReservations.map((reservation) => (
-                <div
-                  key={reservation.id}
-                  className="bg-gray-50 rounded-lg px-2.5 py-2 border border-gray-200 shadow-sm"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 mb-0.5">
-                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                          reservation.status === 'pending'
-                            ? 'bg-yellow-100 text-yellow-700'
-                            : 'bg-green-100 text-green-700'
-                        }`}>
-                          {reservation.status === 'pending' ? 'Pending' : 'Confirmed'}
-                        </span>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-                          reservation.reserver_role === 'teacher'
-                            ? 'bg-purple-100 text-purple-700'
-                            : 'bg-blue-100 text-blue-700'
-                        }`}>
-                          {reservation.reserver_role === 'teacher' ? 'Teacher' : 'Student'}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <h4 className="text-sm font-bold text-[#002147] truncate">{reservation.reserver_name}</h4>
-                        <span className="text-xs text-gray-500">({reservation.reserver_id})</span>
-                      </div>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <p className="text-xs font-semibold text-[#002147] truncate flex-1">{reservation.book_name}</p>
-                        <span className="text-[10px] text-gray-500">SR: {reservation.book?.sr_no || reservation.book_sr_no || 'N/A'}</span>
-                      </div>
-                      {reservation.status === 'confirmed' && (
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-1">
-                          <span className="text-[10px] text-gray-600">
-                            <span className="font-semibold text-[#002147]">Issued:</span> {formatDate(reservation.issue_date)}
-                          </span>
-                          <span className={`text-[10px] ${calculateFine(reservation.due_date, null, settings).days > 0 ? 'text-red-600 font-semibold' : 'text-gray-600'}`}>
-                            <span className="font-semibold text-[#002147]">Due:</span> {formatDate(reservation.due_date)}
-                          </span>
-                          {calculateFine(reservation.due_date, null, settings).amount > 0 && (
-                            <span className="text-[10px] font-bold text-red-700 bg-red-50 px-1.5 py-0.5 rounded border border-red-200">
-                              Fine {formatMoney(calculateFine(reservation.due_date, null, settings).amount, settings)}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                      {reservation.status === 'pending' && (
-                        <span className={`text-[10px] font-bold ${
-                          (() => {
-                            const timeLeft = getTimeRemaining(reservation.created_at)
-                            return timeLeft.expired ? 'text-red-600' : (timeLeft.hours < 2 ? 'text-red-600' : 'text-orange-600')
-                          })()
-                        }`}>
-                          {(() => {
-                            const timeLeft = getTimeRemaining(reservation.created_at)
-                            if (timeLeft.expired) return 'Expired'
-                            return `${String(timeLeft.hours).padStart(2, '0')}h:${String(timeLeft.minutes).padStart(2, '0')}m left`
-                          })()}
-                        </span>
-                      )}
+        {/* Mobile Card View */}
+        <div className="scroll-quiet min-h-0 flex-1 space-y-1.5 overflow-auto p-2 md:hidden">
+          {filteredReservations.length === 0 ? (
+            <EmptyState icon={BookMarked} title="No reservations found" hint="Try adjusting your filters" />
+          ) : (
+            filteredReservations.map((reservation) => (
+              <div
+                key={reservation.id}
+                className="rounded-xl border border-glass-line bg-surface/60 px-3 py-2.5"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-1 flex items-center gap-1.5">
+                      <Pill tone={reservation.status === 'pending' ? 'warning' : 'info'} pulse={reservation.status === 'pending'}>
+                        {reservation.status === 'pending' ? 'Pending' : 'Confirmed'}
+                      </Pill>
+                      <Pill tone={reservation.reserver_role === 'teacher' ? 'brand' : 'neutral'}>
+                        {reservation.reserver_role === 'teacher' ? 'Teacher' : 'Student'}
+                      </Pill>
                     </div>
-                    <div className="flex gap-1">
-                      {reservation.status === 'pending' && (
-                        <button
-                          onClick={() => openConfirmModal(reservation)}
-                          className="p-1.5 bg-green-500 text-white rounded-lg border border-green-700"
-                          title="Confirm"
-                        >
-                          <CheckCircle className="w-4 h-4" />
-                        </button>
-                      )}
-                      {reservation.status === 'confirmed' && (
-                        <button
-                          onClick={() => openReturnModal(reservation)}
-                          className="p-1.5 bg-[#002147] text-white rounded-lg border border-[#fe9800]"
-                          title="Mark as Returned"
-                        >
-                          <Undo2 className="w-4 h-4" />
-                        </button>
-                      )}
+                    <div className="flex items-center gap-2">
+                      <h4 className="truncate text-[13px] font-semibold text-ink">{reservation.reserver_name}</h4>
+                      <span className="text-[11px] text-ink-muted">({reservation.reserver_id})</span>
                     </div>
+                    <div className="mt-0.5 flex items-center gap-2">
+                      <p className="flex-1 truncate text-[12px] font-medium text-ink-soft">{reservation.book_name}</p>
+                      <span className="font-mono text-[10.5px] text-ink-muted">SR: {reservation.book?.sr_no || reservation.book_sr_no || 'N/A'}</span>
+                    </div>
+                    {reservation.status === 'confirmed' && (
+                      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                        <span className="text-[11px] text-ink-muted">
+                          <span className="font-semibold text-ink-soft">Issued:</span> {formatDate(reservation.issue_date)}
+                        </span>
+                        <span className={`text-[11px] ${calculateFine(reservation.due_date, null, settings).days > 0 ? 'font-semibold text-rose-600' : 'text-ink-muted'}`}>
+                          <span className="font-semibold text-ink-soft">Due:</span> {formatDate(reservation.due_date)}
+                        </span>
+                        {calculateFine(reservation.due_date, null, settings).amount > 0 && (
+                          <Pill tone="danger">
+                            Fine {formatMoney(calculateFine(reservation.due_date, null, settings).amount, settings)}
+                          </Pill>
+                        )}
+                      </div>
+                    )}
+                    {reservation.status === 'pending' && (
+                      <span className={`text-[11px] font-semibold tabular-nums ${
+                        (() => {
+                          const timeLeft = getTimeRemaining(reservation.created_at)
+                          return timeLeft.expired ? 'text-rose-600' : (timeLeft.hours < 2 ? 'text-rose-600' : 'text-amber-600')
+                        })()
+                      }`}>
+                        {(() => {
+                          const timeLeft = getTimeRemaining(reservation.created_at)
+                          if (timeLeft.expired) return 'Expired'
+                          return `${String(timeLeft.hours).padStart(2, '0')}h:${String(timeLeft.minutes).padStart(2, '0')}m left`
+                        })()}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex gap-1">
+                    {reservation.status === 'pending' && (
+                      <button
+                        onClick={() => openConfirmModal(reservation)}
+                        className={cn(ui.iconBtn, 'bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 hover:text-emerald-700')}
+                        title="Confirm"
+                      >
+                        <CheckCircle className="size-4" />
+                      </button>
+                    )}
+                    {reservation.status === 'confirmed' && (
+                      <button
+                        onClick={() => openReturnModal(reservation)}
+                        className={cn(ui.iconBtn, 'bg-brand-500/10 text-brand-600 hover:bg-brand-500/20 hover:text-brand-700')}
+                        title="Mark as Returned"
+                      >
+                        <Undo2 className="size-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
-              ))
-            )}
-          </div>
+              </div>
+            ))
+          )}
+        </div>
 
-          {/* Desktop Table View */}
-          <div className="hidden md:block overflow-x-auto overflow-y-auto flex-1 scrollbar-hide">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b-2 border-[#fe9800] sticky top-0">
+        {/* Desktop Table View */}
+        <div className="scroll-quiet hidden min-h-0 flex-1 overflow-auto md:block">
+          <table className={ui.table}>
+            <thead className={ui.thead}>
+              <tr>
+                <th className={ui.th}>Reserver Info</th>
+                <th className={ui.th}>Book SR No</th>
+                <th className={ui.th}>Book Details</th>
+                <th className={ui.th}>Department</th>
+                <th className={ui.th}>Status</th>
+                <th className={ui.th}>Issue Date</th>
+                <th className={ui.th}>Due Date</th>
+                <th className={ui.th}>Fine</th>
+                <th className={ui.th}>Time Left</th>
+                <th className={cn(ui.th, 'text-center')}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredReservations.length === 0 ? (
                 <tr>
-                  <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Reserver Info</th>
-                  <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Book SR No</th>
-                  <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Book Details</th>
-                  <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Department</th>
-                  <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Status</th>
-                  <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Issue Date</th>
-                  <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Due Date</th>
-                  <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Fine</th>
-                  <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Time Left</th>
-                  <th className="px-3 py-2 text-center text-xs font-bold text-[#002147] uppercase tracking-tight">Actions</th>
+                  <td colSpan="10">
+                    <EmptyState icon={BookMarked} title="No reservations found" hint="Try adjusting your filters or search query" />
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {filteredReservations.length === 0 ? (
-                  <tr>
-                    <td colSpan="10" className="px-4 py-12 text-center text-gray-500">
-                      <BookMarked className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-                      <p className="font-medium">No reservations found</p>
-                      <p className="text-sm">Try adjusting your filters or search query</p>
-                    </td>
-                  </tr>
-                ) : (
-                  filteredReservations.map((reservation, index) => (
-                    <tr key={reservation.id} className={`hover:bg-gray-50 transition-colors ${
-                      index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'
-                    }`}>
-                      <td className="px-3 py-2">
-                        <div className="flex items-center gap-1.5">
-                          <div className="flex flex-col min-w-0">
-                            <span className="font-semibold text-xs text-[#002147] truncate">
-                              {reservation.reserver_name}
-                            </span>
-                            <span className="text-[10px] text-gray-500">
-                              {reservation.reserver_id}
-                            </span>
-                          </div>
-                          <span className={`text-[9px] px-1 py-0.5 rounded whitespace-nowrap flex-shrink-0 ${
-                            reservation.reserver_role === 'teacher'
-                              ? 'bg-purple-100 text-purple-700'
-                              : 'bg-blue-100 text-blue-700'
-                          }`}>
-                            {reservation.reserver_role === 'teacher' ? 'T' : 'S'}
+              ) : (
+                filteredReservations.map((reservation) => (
+                  <tr key={reservation.id} className={ui.tr}>
+                    <td className="px-3 py-2">
+                      <div className="flex items-center gap-1.5">
+                        <div className="flex min-w-0 flex-col">
+                          <span className="truncate text-[12.5px] font-semibold text-ink">
+                            {reservation.reserver_name}
+                          </span>
+                          <span className="text-[11px] text-ink-muted">
+                            {reservation.reserver_id}
                           </span>
                         </div>
-                      </td>
-                      <td className="px-3 py-2">
-                        <span className="font-mono text-xs text-[#002147] font-semibold">
-                          {reservation.book?.sr_no || reservation.book_sr_no || 'N/A'}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 max-w-[200px]">
-                        <div className="flex items-center gap-1.5">
-                          <div className="flex flex-col min-w-0 flex-1">
-                            <span
-                              className="font-semibold text-xs text-[#002147] truncate block"
-                              title={reservation.book_name}
-                            >
-                              {reservation.book_name}
-                            </span>
-                            {reservation.book?.author && (
-                              <span
-                                className="text-[10px] text-gray-500 truncate block"
-                                title={reservation.book.author}
-                              >
-                                {reservation.book.author}
-                              </span>
-                            )}
-                          </div>
-                          {reservation.book?.status && (
-                            <span className={`text-[9px] px-1 py-0.5 rounded whitespace-nowrap flex-shrink-0 ${
-                              reservation.status === 'confirmed'
-                                ? 'bg-red-100 text-red-700'
-                                : reservation.book.status === 'Available'
-                                ? 'bg-green-100 text-green-700'
-                                : 'bg-red-100 text-red-700'
-                            }`}>
-                              {reservation.status === 'confirmed' ? 'Borr' : reservation.book.status === 'Available' ? 'Avail' : 'Borr'}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-3 py-2 max-w-[120px]">
                         <span
-                          className="text-[10px] text-gray-600 truncate block"
-                          title={reservation.book?.department || 'N/A'}
-                        >
-                          {reservation.book?.department || 'N/A'}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2">
-                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold ${
-                          reservation.status === 'pending'
-                            ? 'bg-yellow-100 text-yellow-700 border border-yellow-300'
-                            : reservation.status === 'confirmed'
-                            ? 'bg-green-100 text-green-700 border border-green-300'
-                            : 'bg-gray-100 text-gray-700 border border-gray-300'
-                        }`}>
-                          {reservation.status.charAt(0).toUpperCase() + reservation.status.slice(1)}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2">
-                        <span className="text-[10px] text-gray-600 whitespace-nowrap">
-                          {formatDate(reservation.issue_date)}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2">
-                        {(() => {
-                          if (!reservation.due_date) {
-                            return <span className="text-[10px] text-gray-400">-</span>
-                          }
-                          const overdue = reservation.status === 'confirmed' && calculateFine(reservation.due_date, null, settings).days > 0
-                          return (
-                            <span className={`text-[10px] font-semibold whitespace-nowrap ${overdue ? 'text-red-600' : 'text-gray-600'}`}>
-                              {formatDate(reservation.due_date)}
-                            </span>
-                          )
-                        })()}
-                      </td>
-                      <td className="px-3 py-2">
-                        {(() => {
-                          if (reservation.status !== 'confirmed' || !reservation.due_date) {
-                            return <span className="text-[10px] text-gray-400">-</span>
-                          }
-                          const fine = calculateFine(reservation.due_date, null, settings)
-                          if (fine.days === 0) {
-                            return <span className="text-[10px] text-green-600 font-semibold">On time</span>
-                          }
-                          return (
-                            <span className="inline-flex flex-col">
-                              <span className="text-[10px] font-bold text-red-700">{formatMoney(fine.amount, settings)}</span>
-                              <span className="text-[9px] text-red-500">{fine.days}d late</span>
-                            </span>
-                          )
-                        })()}
-                      </td>
-                      <td className="px-3 py-2">
-                        {reservation.status === 'pending' ? (
-                          (() => {
-                            const timeLeft = getTimeRemaining(reservation.created_at)
-                            if (timeLeft.expired) {
-                              return (
-                                <span className="inline-flex items-center gap-1 px-2 py-1 bg-red-100 text-red-700 rounded-md text-[10px] font-bold border border-red-300">
-                                  <span className="w-1 h-1 rounded-full bg-red-600 animate-pulse"></span>
-                                  Expired
-                                </span>
-                              )
-                            }
-                            const isUrgent = timeLeft.hours < 2
-                            return (
-                              <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold border ${
-                                isUrgent
-                                  ? 'bg-red-50 text-red-700 border-red-300'
-                                  : 'bg-orange-50 text-orange-700 border-orange-300'
-                              }`}>
-                                <div className="flex items-center gap-0.5">
-                                  <span className="font-mono">{String(timeLeft.hours).padStart(2, '0')}</span>
-                                  <span className="text-[8px]">h</span>
-                                  <span className="mx-0.5">:</span>
-                                  <span className="font-mono">{String(timeLeft.minutes).padStart(2, '0')}</span>
-                                  <span className="text-[8px]">m</span>
-                                  <span className="mx-0.5">:</span>
-                                  <span className="font-mono">{String(timeLeft.seconds).padStart(2, '0')}</span>
-                                  <span className="text-[8px]">s</span>
-                                </div>
-                              </div>
-                            )
-                          })()
-                        ) : (
-                          <span className="text-[10px] text-gray-400">-</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2">
-                        <div className="flex gap-1 justify-center">
-                          {reservation.status === 'pending' && (
-                            <button
-                              onClick={() => openConfirmModal(reservation)}
-                              className="p-1.5 bg-green-500 text-white rounded hover:bg-green-600 transition-colors border border-green-700"
-                              title="Confirm Reservation"
-                            >
-                              <CheckCircle className="w-3.5 h-3.5" />
-                            </button>
+                          className={cn(
+                            'grid size-[18px] shrink-0 place-items-center rounded-md text-[9.5px] font-bold',
+                            reservation.reserver_role === 'teacher'
+                              ? 'bg-brand-500/12 text-brand-700'
+                              : 'bg-sky-500/10 text-sky-700'
                           )}
-                          {reservation.status === 'confirmed' && (
-                            <button
-                              onClick={() => openReturnModal(reservation)}
-                              className="p-1.5 bg-[#002147] text-white rounded hover:bg-[#00335f] transition-colors border border-[#fe9800]"
-                              title="Mark as Returned"
+                          title={reservation.reserver_role === 'teacher' ? 'Teacher' : 'Student'}
+                        >
+                          {reservation.reserver_role === 'teacher' ? 'T' : 'S'}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2">
+                      <span className="font-mono text-[12px] font-semibold text-ink-soft">
+                        {reservation.book?.sr_no || reservation.book_sr_no || 'N/A'}
+                      </span>
+                    </td>
+                    <td className="max-w-[220px] px-3 py-2">
+                      <div className="flex items-center gap-1.5">
+                        <div className="flex min-w-0 flex-1 flex-col">
+                          <span
+                            className="block truncate text-[12.5px] font-semibold text-ink"
+                            title={reservation.book_name}
+                          >
+                            {reservation.book_name}
+                          </span>
+                          {reservation.book?.author && (
+                            <span
+                              className="block truncate text-[11px] text-ink-muted"
+                              title={reservation.book.author}
                             >
-                              <Undo2 className="w-3.5 h-3.5" />
-                            </button>
+                              {reservation.book.author}
+                            </span>
                           )}
                         </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Footer with Count */}
-          <div className="px-2 md:px-4 py-2 md:py-3 bg-gray-50 border-t-2 border-[#002147]">
-            <p className="text-[10px] md:text-sm text-gray-600">
-              Showing <span className="font-semibold text-[#002147]">{filteredReservations.length}</span> of{' '}
-              <span className="font-semibold text-[#002147]">{stats.total}</span> reservations
-            </p>
-          </div>
+                        {reservation.book?.status && (
+                          <span className={cn(
+                            'shrink-0 whitespace-nowrap rounded-md px-1.5 py-0.5 text-[10px] font-semibold',
+                            reservation.status === 'confirmed'
+                              ? 'bg-rose-500/10 text-rose-700'
+                              : reservation.book.status === 'Available'
+                              ? 'bg-emerald-500/10 text-emerald-700'
+                              : 'bg-rose-500/10 text-rose-700'
+                          )}>
+                            {reservation.status === 'confirmed' ? 'Borr' : reservation.book.status === 'Available' ? 'Avail' : 'Borr'}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="max-w-[140px] px-3 py-2">
+                      <span
+                        className="block truncate text-[12px] text-ink-muted"
+                        title={reservation.book?.department || 'N/A'}
+                      >
+                        {reservation.book?.department || 'N/A'}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2">
+                      <Pill tone={STATUS_TONE[reservation.status] || 'neutral'} pulse={reservation.status === 'pending'}>
+                        {reservation.status.charAt(0).toUpperCase() + reservation.status.slice(1)}
+                      </Pill>
+                    </td>
+                    <td className="px-3 py-2">
+                      <span className="whitespace-nowrap text-[12px] text-ink-soft">
+                        {formatDate(reservation.issue_date)}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2">
+                      {(() => {
+                        if (!reservation.due_date) {
+                          return <span className="text-[12px] text-ink-muted/70">-</span>
+                        }
+                        const overdue = reservation.status === 'confirmed' && calculateFine(reservation.due_date, null, settings).days > 0
+                        return (
+                          <span className={`whitespace-nowrap text-[12px] font-medium ${overdue ? 'font-semibold text-rose-600' : 'text-ink-soft'}`}>
+                            {formatDate(reservation.due_date)}
+                          </span>
+                        )
+                      })()}
+                    </td>
+                    <td className="px-3 py-2">
+                      {(() => {
+                        if (reservation.status !== 'confirmed' || !reservation.due_date) {
+                          return <span className="text-[12px] text-ink-muted/70">-</span>
+                        }
+                        const fine = calculateFine(reservation.due_date, null, settings)
+                        if (fine.days === 0) {
+                          return <Pill tone="success">On time</Pill>
+                        }
+                        return (
+                          <span className="inline-flex flex-col leading-tight">
+                            <span className="text-[12px] font-bold tabular-nums text-rose-700">{formatMoney(fine.amount, settings)}</span>
+                            <span className="text-[10.5px] text-rose-500">{fine.days}d late</span>
+                          </span>
+                        )
+                      })()}
+                    </td>
+                    <td className="px-3 py-2">
+                      {reservation.status === 'pending' ? (
+                        (() => {
+                          const timeLeft = getTimeRemaining(reservation.created_at)
+                          if (timeLeft.expired) {
+                            return (
+                              <Pill tone="danger" pulse>
+                                Expired
+                              </Pill>
+                            )
+                          }
+                          const isUrgent = timeLeft.hours < 2
+                          return (
+                            <div className={cn(
+                              'inline-flex items-center rounded-lg px-2 py-1 font-mono text-[11px] font-semibold tabular-nums',
+                              isUrgent
+                                ? 'bg-rose-500/10 text-rose-700'
+                                : 'bg-amber-500/12 text-amber-700'
+                            )}>
+                              <div className="flex items-center gap-0.5">
+                                <span>{String(timeLeft.hours).padStart(2, '0')}</span>
+                                <span className="text-[9px] opacity-70">h</span>
+                                <span className="mx-0.5 opacity-60">:</span>
+                                <span>{String(timeLeft.minutes).padStart(2, '0')}</span>
+                                <span className="text-[9px] opacity-70">m</span>
+                                <span className="mx-0.5 opacity-60">:</span>
+                                <span>{String(timeLeft.seconds).padStart(2, '0')}</span>
+                                <span className="text-[9px] opacity-70">s</span>
+                              </div>
+                            </div>
+                          )
+                        })()
+                      ) : (
+                        <span className="text-[12px] text-ink-muted/70">-</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="flex justify-center gap-1">
+                        {reservation.status === 'pending' && (
+                          <button
+                            onClick={() => openConfirmModal(reservation)}
+                            className={cn(ui.iconBtn, 'text-emerald-600 hover:bg-emerald-500/10 hover:text-emerald-700')}
+                            title="Confirm Reservation"
+                          >
+                            <CheckCircle className="size-4" />
+                          </button>
+                        )}
+                        {reservation.status === 'confirmed' && (
+                          <button
+                            onClick={() => openReturnModal(reservation)}
+                            className={cn(ui.iconBtn, 'text-brand-600 hover:bg-brand-500/10 hover:text-brand-700')}
+                            title="Mark as Returned"
+                          >
+                            <Undo2 className="size-4" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
-      </div>
+
+        {/* Footer with Count */}
+        <div className="border-t border-glass-line px-3.5 py-2">
+          <p className="text-[11.5px] text-ink-muted">
+            Showing <span className="font-semibold text-ink">{filteredReservations.length}</span> of{' '}
+            <span className="font-semibold text-ink">{stats.total}</span> reservations
+          </p>
+        </div>
+      </GlassCard>
 
       {/* Confirm Modal */}
       {showConfirmModal && selectedReservation && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className={`bg-white rounded-lg max-w-md w-full border-2 shadow-2xl ${existingReservation ? 'border-red-500' : 'border-green-500'}`}>
-            <div className="p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center border-2 ${existingReservation ? 'bg-red-100 border-red-500' : 'bg-green-100 border-green-500'}`}>
-                  {existingReservation ? (
-                    <AlertTriangle className="w-6 h-6 text-red-600" />
-                  ) : (
-                    <CheckCircle className="w-6 h-6 text-green-600" />
-                  )}
-                </div>
-                <h3 className="text-xl font-bold text-[#002147]">
-                  {existingReservation ? 'Warning!' : 'Confirm Reservation'}
-                </h3>
-              </div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fade-in absolute inset-0 bg-navy-900/30 backdrop-blur-[3px]" />
+          <div className="glass-strong pop-in relative flex max-h-[90vh] w-full max-w-md flex-col rounded-[22px]">
+            <div className="flex items-center gap-3 border-b border-glass-line px-5 py-3.5">
+              <span className={cn(
+                'grid size-9 shrink-0 place-items-center rounded-xl',
+                existingReservation ? 'bg-rose-500/10 text-rose-600' : 'bg-emerald-500/10 text-emerald-600'
+              )}>
+                {existingReservation ? (
+                  <AlertTriangle className="size-[18px]" />
+                ) : (
+                  <CheckCircle className="size-[18px]" />
+                )}
+              </span>
+              <h3 className="text-[15px] font-semibold text-heading">
+                {existingReservation ? 'Warning!' : 'Confirm Reservation'}
+              </h3>
+            </div>
 
+            <div className="scroll-quiet min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-4">
               {existingReservation ? (
                 <>
-                  <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4 mb-4">
-                    <p className="text-sm font-semibold text-red-800 mb-2">
+                  <div className="rounded-xl border border-rose-500/25 bg-rose-500/[0.07] p-3">
+                    <p className="mb-1 text-[12.5px] font-semibold text-rose-700">
                       ⚠️ This user already has a confirmed reservation!
                     </p>
-                    <p className="text-xs text-red-700">
+                    <p className="text-[12px] text-rose-700/90">
                       <span className="font-semibold">{selectedReservation.reserver_name}</span> currently has:
                     </p>
-                    <div className="mt-2 bg-white rounded p-2 border border-red-200">
-                      <p className="text-xs font-semibold text-[#002147]">{existingReservation.book_name}</p>
-                      <p className="text-xs text-gray-500">SR No: {existingReservation.book_sr_no}</p>
+                    <div className="mt-2 rounded-lg bg-surface/80 px-2.5 py-2 ring-1 ring-rose-500/15">
+                      <p className="text-[12px] font-semibold text-ink">{existingReservation.book_name}</p>
+                      <p className="text-[11px] text-ink-muted">SR No: {existingReservation.book_sr_no}</p>
                     </div>
                   </div>
-                  <p className="text-sm text-gray-700 mb-4">
+                  <p className="text-[12.5px] text-ink-soft">
                     Only one book can be reserved per person. Please ensure the previously borrowed book is returned before confirming this new reservation.
                   </p>
-                  <div className="bg-gray-50 p-4 rounded-lg mb-4 border-2 border-gray-200">
-                    <p className="text-xs text-gray-500 mb-1">Attempting to confirm:</p>
-                    <p className="text-sm font-semibold text-[#002147]">{selectedReservation.reserver_name}</p>
-                    <p className="text-sm text-gray-600">{selectedReservation.book_name}</p>
+                  <div className="rounded-xl border border-glass-line bg-surface/60 p-3">
+                    <p className="mb-0.5 text-[11px] text-ink-muted">Attempting to confirm:</p>
+                    <p className="text-[13px] font-semibold text-ink">{selectedReservation.reserver_name}</p>
+                    <p className="text-[12px] text-ink-soft">{selectedReservation.book_name}</p>
                   </div>
                 </>
               ) : (
                 <>
-                  <p className="text-gray-600 mb-4">
+                  <p className="text-[12.5px] text-ink-soft">
                     Are you sure you want to confirm this reservation?
                   </p>
-                  <div className="bg-gray-50 p-4 rounded-lg mb-4 border-2 border-gray-200">
-                    <p className="text-sm font-semibold text-[#002147]">{selectedReservation.reserver_name}</p>
-                    <p className="text-sm text-gray-600">{selectedReservation.book_name}</p>
+                  <div className="rounded-xl border border-glass-line bg-surface/60 p-3">
+                    <p className="text-[13px] font-semibold text-ink">{selectedReservation.reserver_name}</p>
+                    <p className="text-[12px] text-ink-soft">{selectedReservation.book_name}</p>
                   </div>
                 </>
               )}
 
               {/* Issue date / due date — set on every reservation */}
-              <div className="bg-white border-2 border-[#fe9800] rounded-lg p-3 mb-4">
-                <p className="text-xs font-bold text-[#002147] uppercase tracking-wide mb-2 flex items-center gap-1.5">
-                  <CalendarDays className="w-4 h-4 text-[#fe9800]" />
+              <div className="rounded-xl border border-brand-500/25 bg-brand-500/[0.05] p-3">
+                <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-soft">
+                  <CalendarDays className="size-4 text-brand-500" />
                   Loan Period
                 </p>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[10px] font-bold text-gray-600 uppercase mb-1">Issue Date *</label>
+                    <label className={ui.label}>Issue Date *</label>
                     <input
                       type="date"
                       required
                       value={issueDate}
                       onChange={(e) => setIssueDate(e.target.value)}
-                      className="w-full px-2 py-2 border-2 border-gray-200 rounded-lg bg-gray-50 text-gray-900 text-sm focus:ring-2 focus:ring-[#fe9800] focus:border-[#fe9800] outline-none"
+                      className={ui.input}
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-gray-600 uppercase mb-1">Due Date *</label>
+                    <label className={ui.label}>Due Date *</label>
                     <input
                       type="date"
                       required
                       value={dueDate}
                       min={issueDate || undefined}
                       onChange={(e) => setDueDate(e.target.value)}
-                      className="w-full px-2 py-2 border-2 border-gray-200 rounded-lg bg-gray-50 text-gray-900 text-sm focus:ring-2 focus:ring-[#fe9800] focus:border-[#fe9800] outline-none"
+                      className={ui.input}
                     />
                   </div>
                 </div>
-                <p className="text-[10px] text-gray-500 mt-2">
+                <p className="mt-2 text-[11px] text-ink-muted">
                   Pick when the book is due back. Every day past it is fined{' '}
-                  <span className="font-bold text-[#002147]">{formatMoney(settings.fine_per_day, settings)}</span>.
+                  <span className="font-semibold text-ink">{formatMoney(settings.fine_per_day, settings)}</span>.
                 </p>
               </div>
+            </div>
 
-              <div className="flex gap-3">
+            <div className="flex gap-2 border-t border-glass-line px-5 py-3">
+              <button
+                onClick={() => {
+                  setShowConfirmModal(false)
+                  setSelectedReservation(null)
+                  setExistingReservation(null)
+                }}
+                className={cn(ui.btnSecondary, 'flex-1')}
+              >
+                Cancel
+              </button>
+              {existingReservation ? (
                 <button
-                  onClick={() => {
-                    setShowConfirmModal(false)
-                    setSelectedReservation(null)
-                    setExistingReservation(null)
-                  }}
-                  className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium border-2 border-gray-400"
+                  onClick={() => handleConfirm(selectedReservation, true)}
+                  className={cn(ui.btnDanger, 'flex-1')}
                 >
-                  Cancel
+                  Confirm Anyway
                 </button>
-                {existingReservation ? (
-                  <button
-                    onClick={() => handleConfirm(selectedReservation, true)}
-                    className="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-medium border-2 border-red-700"
-                  >
-                    Confirm Anyway
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => handleConfirm(selectedReservation, false)}
-                    className="flex-1 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-medium border-2 border-green-700"
-                  >
-                    Confirm
-                  </button>
-                )}
-              </div>
+              ) : (
+                <button
+                  onClick={() => handleConfirm(selectedReservation, false)}
+                  className={cn(ui.btnSuccess, 'flex-1')}
+                >
+                  Confirm
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -896,33 +856,34 @@ export default function ReservationsPage() {
         const charged = Number(fineAmount)
         const chargedValid = Number.isFinite(charged) && charged >= 0
         return (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg max-w-md w-full border-2 border-[#fe9800] shadow-2xl">
-              <div className="p-6">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-12 h-12 bg-[#fe9800]/15 rounded-full flex items-center justify-center border-2 border-[#fe9800]">
-                    <Undo2 className="w-6 h-6 text-[#fe9800]" />
-                  </div>
-                  <h3 className="text-xl font-bold text-[#002147]">Return Book</h3>
-                </div>
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="fade-in absolute inset-0 bg-navy-900/30 backdrop-blur-[3px]" />
+            <div className="glass-strong pop-in relative flex max-h-[90vh] w-full max-w-md flex-col rounded-[22px]">
+              <div className="flex items-center gap-3 border-b border-glass-line px-5 py-3.5">
+                <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-brand-500/10 text-brand-600">
+                  <Undo2 className="size-[18px]" />
+                </span>
+                <h3 className="text-[15px] font-semibold text-heading">Return Book</h3>
+              </div>
 
-                <div className="bg-gray-50 p-4 rounded-lg mb-4 border-2 border-gray-200">
-                  <p className="text-sm font-semibold text-[#002147]">{selectedReservation.reserver_name}</p>
-                  <p className="text-sm text-gray-600">{selectedReservation.book_name}</p>
-                  <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-gray-200">
+              <div className="scroll-quiet min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-4">
+                <div className="rounded-xl border border-glass-line bg-surface/60 p-3">
+                  <p className="text-[13px] font-semibold text-ink">{selectedReservation.reserver_name}</p>
+                  <p className="text-[12px] text-ink-soft">{selectedReservation.book_name}</p>
+                  <div className="mt-2 grid grid-cols-2 gap-2 border-t border-glass-line pt-2">
                     <div>
-                      <p className="text-[10px] font-bold text-gray-500 uppercase">Issued</p>
-                      <p className="text-xs font-semibold text-[#002147]">{formatDate(selectedReservation.issue_date)}</p>
+                      <p className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-ink-muted">Issued</p>
+                      <p className="text-[12px] font-semibold text-ink">{formatDate(selectedReservation.issue_date)}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] font-bold text-gray-500 uppercase">Due</p>
-                      <p className="text-xs font-semibold text-[#002147]">{formatDate(selectedReservation.due_date)}</p>
+                      <p className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-ink-muted">Due</p>
+                      <p className="text-[12px] font-semibold text-ink">{formatDate(selectedReservation.due_date)}</p>
                     </div>
                   </div>
                 </div>
 
-                <div className="mb-4">
-                  <label className="block text-[10px] font-bold text-gray-600 uppercase mb-1">Return Date *</label>
+                <div>
+                  <label className={ui.label}>Return Date *</label>
                   <input
                     type="date"
                     value={returnDate}
@@ -935,32 +896,35 @@ export default function ReservationsPage() {
                       setFineAmount(String(owed.amount))
                       setFinePaid(owed.amount === 0)
                     }}
-                    className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg bg-gray-50 text-gray-900 text-sm focus:ring-2 focus:ring-[#fe9800] focus:border-[#fe9800] outline-none"
+                    className={ui.input}
                   />
                 </div>
 
-                <div className={`rounded-lg p-3 mb-4 border-2 ${fine.amount > 0 ? 'bg-red-50 border-red-300' : 'bg-green-50 border-green-300'}`}>
+                <div className={cn(
+                  'rounded-xl border p-3',
+                  fine.amount > 0 ? 'border-rose-500/25 bg-rose-500/[0.07]' : 'border-emerald-500/25 bg-emerald-500/[0.07]'
+                )}>
                   {fine.amount > 0 ? (
                     <>
-                      <p className="text-sm font-bold text-red-800">
+                      <p className="text-[13px] font-semibold text-rose-700">
                         Calculated fine: {formatMoney(fine.amount, settings)}
                       </p>
-                      <p className="text-xs text-red-700 mt-0.5">
+                      <p className="mt-0.5 text-[11.5px] text-rose-600">
                         {fine.days} day(s) late &times; {formatMoney(settings.fine_per_day, settings)} per day
                       </p>
                     </>
                   ) : (
-                    <p className="text-sm font-bold text-green-800">Returned on time — no fine due.</p>
+                    <p className="text-[13px] font-semibold text-emerald-700">Returned on time — no fine due.</p>
                   )}
                 </div>
 
                 {/* Fine actually charged at the counter */}
-                <div className="bg-white border-2 border-[#fe9800] rounded-lg p-3 mb-4">
-                  <p className="text-xs font-bold text-[#002147] uppercase tracking-wide mb-2">
+                <div className="rounded-xl border border-brand-500/25 bg-brand-500/[0.05] p-3">
+                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-soft">
                     Record Fine
                   </p>
 
-                  <label className="block text-[10px] font-bold text-gray-600 uppercase mb-1">
+                  <label className={ui.label}>
                     Fine Charged ({settings.currency})
                   </label>
                   <div className="flex items-center gap-2">
@@ -970,7 +934,7 @@ export default function ReservationsPage() {
                       step="0.01"
                       value={fineAmount}
                       onChange={(e) => setFineAmount(e.target.value)}
-                      className="flex-1 px-3 py-2 border-2 border-gray-200 rounded-lg bg-gray-50 text-gray-900 text-sm focus:ring-2 focus:ring-[#fe9800] focus:border-[#fe9800] outline-none"
+                      className={cn(ui.input, 'flex-1')}
                     />
                     <button
                       type="button"
@@ -978,54 +942,54 @@ export default function ReservationsPage() {
                         setFineAmount('0')
                         setFinePaid(true)
                       }}
-                      className="px-3 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-xs font-bold border-2 border-gray-400 whitespace-nowrap"
+                      className={ui.btnSecondary}
                       title="Charge nothing for this return"
                     >
                       Waive
                     </button>
                   </div>
                   {!chargedValid && (
-                    <p className="text-[10px] text-red-600 font-semibold mt-1">
+                    <p className="mt-1 text-[11px] font-semibold text-rose-600">
                       Enter an amount of zero or more.
                     </p>
                   )}
 
-                  <label className={`flex items-center gap-2 mt-3 ${chargedValid && charged > 0 ? 'cursor-pointer' : 'opacity-60'}`}>
+                  <label className={`mt-3 flex items-center gap-2 ${chargedValid && charged > 0 ? 'cursor-pointer' : 'opacity-60'}`}>
                     <input
                       type="checkbox"
                       checked={chargedValid && charged === 0 ? true : finePaid}
                       disabled={!chargedValid || charged === 0}
                       onChange={(e) => setFinePaid(e.target.checked)}
-                      className="w-4 h-4 accent-[#fe9800]"
+                      className="size-4 accent-brand-500"
                     />
-                    <span className="text-xs font-semibold text-[#002147]">
+                    <span className="text-[12px] font-semibold text-ink">
                       Fine collected now
                     </span>
                   </label>
-                  <p className="text-[10px] text-gray-500 mt-1">
+                  <p className="mt-1 text-[11px] text-ink-muted">
                     Leave it unticked to record the fine as outstanding — it stays on the
                     borrower&apos;s record until it is paid.
                   </p>
                 </div>
+              </div>
 
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => {
-                      setShowReturnModal(false)
-                      setSelectedReservation(null)
-                    }}
-                    className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium border-2 border-gray-400"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() => handleReturn(selectedReservation)}
-                    disabled={!chargedValid}
-                    className="flex-1 px-4 py-2 bg-[#002147] text-white rounded-lg hover:bg-[#00335f] transition-colors font-medium border-2 border-[#fe9800] disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Confirm Return
-                  </button>
-                </div>
+              <div className="flex gap-2 border-t border-glass-line px-5 py-3">
+                <button
+                  onClick={() => {
+                    setShowReturnModal(false)
+                    setSelectedReservation(null)
+                  }}
+                  className={cn(ui.btnSecondary, 'flex-1')}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleReturn(selectedReservation)}
+                  disabled={!chargedValid}
+                  className={cn(ui.btnPrimary, 'flex-1')}
+                >
+                  Confirm Return
+                </button>
               </div>
             </div>
           </div>

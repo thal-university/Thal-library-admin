@@ -1,34 +1,415 @@
 @import "tailwindcss";
 
-@layer utilities {
-  @keyframes slide-in-right {
-    from {
-      transform: translateX(100%);
-      opacity: 0;
-    }
-    to {
-      transform: translateX(0);
-      opacity: 1;
-    }
-  }
+/* Light glass theme only. Dark variants fire only under an explicit .dark class, which is never set. */
+@custom-variant dark (&:where(.dark, .dark *));
 
-  .animate-slide-in-right {
-    animation: slide-in-right 0.3s ease-out;
-  }
+/* ------------------------------------------------------------------
+   Thal University Bhakkar - brand tokens (glassmorphism theme)
+   Shared with the Society Portal so both panels look like one family.
+------------------------------------------------------------------- */
+:root {
+  --brand-50: #fff6ed;
+  --brand-100: #ffead4;
+  --brand-200: #ffd0a8;
+  --brand-300: #ffb878;
+  --brand-400: #f99a4a;
+  --brand-500: #ee7a1a;
+  --brand-600: #dd6b12;
+  --brand-700: #b85310;
 
-  /* Hide scrollbar for Chrome, Safari and Opera */
-  .scrollbar-hide::-webkit-scrollbar {
+  --navy-600: #2b3a63;
+  --navy-700: #1e2a4a;
+  --navy-800: #16203b;
+  --navy-900: #0f172e;
+
+  --ink: #18203a;
+  --ink-soft: #485271;
+  --ink-muted: #737d99;
+
+  --glass-line: rgba(24, 32, 58, 0.065);
+
+  --surface: #ffffff;
+  --edge: #ffffff;
+  --heading: #16203b;
+  --page: #edf2f9;
+
+  --success: #15803d;
+  --danger: #c2410c;
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.32, 0.64, 1);
+}
+
+@theme inline {
+  --color-brand-50: var(--brand-50);
+  --color-brand-100: var(--brand-100);
+  --color-brand-200: var(--brand-200);
+  --color-brand-300: var(--brand-300);
+  --color-brand-400: var(--brand-400);
+  --color-brand-500: var(--brand-500);
+  --color-brand-600: var(--brand-600);
+  --color-brand-700: var(--brand-700);
+  --color-navy-600: var(--navy-600);
+  --color-navy-700: var(--navy-700);
+  --color-navy-800: var(--navy-800);
+  --color-navy-900: var(--navy-900);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-muted: var(--ink-muted);
+  --color-glass-line: var(--glass-line);
+  --color-surface: var(--surface);
+  --color-edge: var(--edge);
+  --color-heading: var(--heading);
+  --color-success: var(--success);
+  --color-danger: var(--danger);
+  --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+  --ease-out-soft: var(--ease-out);
+  --ease-spring: var(--ease-spring);
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  color: var(--ink);
+  background-color: var(--page);
+  font-family: var(--font-sans);
+  font-feature-settings: "cv11", "ss01";
+}
+
+::selection {
+  background: rgba(238, 122, 26, 0.22);
+}
+
+/* ------------------------------------------------------------------
+   Aurora backdrop: slow drifting colour field behind the glass
+------------------------------------------------------------------- */
+.aurora {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 80% at 50% -20%, #f7f9fd 0%, transparent 60%),
+    linear-gradient(160deg, #eef3fb 0%, #e9eff8 45%, #f3eff6 100%);
+}
+
+.aurora > span {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(70px);
+  opacity: 0.75;
+  will-change: transform;
+  animation: drift 38s var(--ease-out) infinite alternate;
+}
+
+.aurora > span:nth-child(1) {
+  width: 46rem;
+  height: 34rem;
+  top: -14rem;
+  right: -10rem;
+  background: radial-gradient(circle at 40% 40%, #b9d3f7, transparent 70%);
+}
+.aurora > span:nth-child(2) {
+  width: 40rem;
+  height: 32rem;
+  top: 22%;
+  left: -14rem;
+  background: radial-gradient(circle at 50% 50%, #d9e5f7, transparent 70%);
+  animation-duration: 46s;
+  animation-delay: -12s;
+}
+.aurora > span:nth-child(3) {
+  width: 38rem;
+  height: 30rem;
+  bottom: -14rem;
+  left: 38%;
+  background: radial-gradient(circle at 50% 50%, #ffd9bd, transparent 70%);
+  opacity: 0.65;
+  animation-duration: 52s;
+  animation-delay: -20s;
+}
+.aurora > span:nth-child(4) {
+  width: 28rem;
+  height: 24rem;
+  bottom: 6%;
+  right: 4%;
+  background: radial-gradient(circle at 50% 50%, #e7dcf6, transparent 70%);
+  opacity: 0.6;
+  animation-duration: 44s;
+  animation-delay: -6s;
+}
+
+/* fine grain so large gradients never band */
+.aurora::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.35;
+  mix-blend-mode: soft-light;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.5'/></svg>");
+}
+
+@keyframes drift {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(4rem, 2.5rem, 0) scale(1.08);
+  }
+  100% {
+    transform: translate3d(-3rem, 4rem, 0) scale(0.96);
+  }
+}
+
+/* ------------------------------------------------------------------
+   Glass surfaces. A masked ::before draws a light-catching 1px edge
+   that is bright on top and fades down the sides.
+------------------------------------------------------------------- */
+@utility glass {
+  position: relative;
+  isolation: isolate;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.74) 0%, rgba(255, 255, 255, 0.5) 100%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 1px 2px rgba(24, 32, 58, 0.04),
+    0 12px 32px -18px rgba(30, 50, 90, 0.22);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 1) 0%,
+      rgba(255, 255, 255, 0.35) 40%,
+      rgba(255, 255, 255, 0.7) 100%
+    );
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+}
+
+@utility glass-strong {
+  position: relative;
+  isolation: isolate;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.86) 0%, rgba(255, 255, 255, 0.66) 100%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 1) inset,
+    0 2px 6px rgba(24, 32, 58, 0.04),
+    0 24px 60px -28px rgba(30, 50, 90, 0.35);
+  backdrop-filter: blur(28px) saturate(170%);
+  -webkit-backdrop-filter: blur(28px) saturate(170%);
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(180deg, #fff 0%, rgba(255, 255, 255, 0.4) 50%, rgba(255, 255, 255, 0.8) 100%);
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+}
+
+/* Lift on hover for interactive cards */
+@utility lift {
+  transition:
+    transform 450ms var(--ease-spring),
+    box-shadow 450ms var(--ease-out),
+    background-color 300ms var(--ease-out);
+  &:hover {
+    transform: translateY(-3px);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.95) inset,
+      0 2px 4px rgba(24, 32, 58, 0.04),
+      0 22px 44px -22px rgba(30, 50, 90, 0.38);
+  }
+}
+
+/* Staggered entrance */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@utility rise {
+  animation: rise 700ms var(--ease-out) backwards;
+  animation-delay: calc(var(--i, 0) * 60ms);
+}
+
+/* Soft pulse used on "pending" dots */
+@keyframes ping-soft {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  80%,
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+@utility ping-soft {
+  animation: ping-soft 1.8s var(--ease-out) infinite;
+}
+
+/* Skeleton shimmer for loading states */
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@utility skeleton {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.5rem;
+  background: rgba(24, 32, 58, 0.06);
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.65), transparent);
+    animation: shimmer 1.4s infinite;
+  }
+}
+
+/* Dialogs and dropdowns */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@utility fade-in {
+  animation: fade-in 300ms var(--ease-out) both;
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@utility pop-in {
+  animation: pop-in 380ms var(--ease-spring) both;
+}
+
+/* Dropdown menus grow out of their trigger */
+@keyframes select-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@utility select-pop {
+  animation: select-pop 260ms var(--ease-spring) both;
+}
+
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+@utility animate-slide-in-right {
+  animation: slide-in-right 0.3s var(--ease-out);
+}
+
+/* Thin, quiet scrollbars inside glass panels */
+.scroll-quiet {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(24, 32, 58, 0.15) transparent;
+}
+
+/* Hidden scrollbar that still scrolls */
+@utility scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  &::-webkit-scrollbar {
     display: none;
   }
+}
 
-  /* Hide scrollbar for IE, Edge and Firefox */
-  .scrollbar-hide {
-    -ms-overflow-style: none;  /* IE and Edge */
-    scrollbar-width: none;  /* Firefox */
+@media (prefers-reduced-motion: reduce) {
+  .aurora > span,
+  .rise,
+  .ping-soft,
+  .skeleton::after {
+    animation: none !important;
   }
+  .fade-in,
+  .pop-in,
+  .select-pop,
+  .animate-slide-in-right {
+    animation-duration: 1ms !important;
+  }
+  .lift,
+  .lift:hover {
+    transition: none;
+    transform: none;
+  }
+}
 
-  /* Ensure smooth scrolling */
-  .scrollbar-hide {
-    -webkit-overflow-scrolling: touch;
+/* ------------------------------------------------------------------
+   Print: plain white cards, no app chrome
+------------------------------------------------------------------- */
+@media print {
+  body {
+    background: #fff !important;
+  }
+  .aurora,
+  [data-print-hide] {
+    display: none !important;
+  }
+  .glass,
+  .glass-strong {
+    background: #fff !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    border: 1px solid #e5e7eb;
+  }
+  .glass::before,
+  .glass-strong::before {
+    display: none;
+  }
+  .rise {
+    animation: none !important;
   }
 }

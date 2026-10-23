@@ -1,9 +1,11 @@
 "use client"
 import { useEffect, useState } from 'react'
-import Header from '@/components/Header'
 import Loader from '@/components/Loader'
 import { BookMarked, Search, X, CheckCircle, Trash2, Filter } from 'lucide-react'
-import toast, { Toaster } from 'react-hot-toast'
+import toast from 'react-hot-toast'
+import { GlassCard, EmptyState, StatCard, Pill, ui } from '@/components/ui/glass'
+import Select from '@/components/ui/Select'
+import { cn } from '@/lib/utils'
 import {
   formatDate,
   formatMoney,
@@ -11,6 +13,8 @@ import {
   getLibrarySettings,
   fetchReservationsList
 } from '@/lib/librarySettings'
+
+const ROLE_OPTIONS = [['all', 'All Roles'], ['student', 'Students'], ['teacher', 'Teachers']]
 
 export default function CompletedReservationsPage() {
   const [loading, setLoading] = useState(true)
@@ -73,7 +77,7 @@ export default function CompletedReservationsPage() {
     }
   }
 
-  if (loading) return <Loader />
+  if (loading) return <Loader inline />
 
   const filteredReservations = reservations.filter(r => {
     if (filterRole !== 'all' && r.reserver_role !== filterRole) return false
@@ -94,409 +98,301 @@ export default function CompletedReservationsPage() {
     return true
   })
 
+  const segBtn = (active) => cn(
+    'inline-flex h-7 items-center justify-center rounded-lg px-3 text-[12.5px] font-semibold transition',
+    active
+      ? 'bg-brand-500 text-white shadow-[0_6px_14px_-6px_rgba(238,122,26,0.7)]'
+      : 'text-ink-soft hover:bg-surface hover:text-ink'
+  )
+
   return (
-    <div className="h-screen overflow-hidden bg-white flex flex-col">
-      <Toaster position="top-right" />
-      <Header title="Completed Reservations" />
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      {/* Stats Cards */}
+      <div className="grid shrink-0 grid-cols-2 gap-3 sm:grid-cols-4">
+        <StatCard index={0} icon={BookMarked} label="Total" value={stats.total} tone="brand" />
+        <StatCard index={1} icon={CheckCircle} label="Done" value={stats.completed} tone="success" />
+        <StatCard index={2} icon={Trash2} label="Deleted" value={stats.deleted} tone="navy" />
+        <StatCard index={3} icon={BookMarked} label="Fines" value={formatMoney(stats.fines, settings)} tone="danger" />
+      </div>
 
-      <div className="flex-1 overflow-y-auto p-2 sm:p-3 space-y-2">
-        {/* Stats Cards - Compact for mobile */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          <div className="bg-white rounded-lg p-2 sm:p-3 border-2 border-[#fe9800] shadow-md">
-            <div className="flex items-center justify-between">
-              <div className="p-1.5 sm:p-2 rounded-lg bg-[#fe9800]">
-                <BookMarked className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-              </div>
-              <div className="text-lg sm:text-2xl font-bold text-[#002147]">
-                {stats.total}
-              </div>
-            </div>
-            <p className="text-[10px] sm:text-xs font-bold text-[#002147] mt-1 uppercase">Total</p>
-          </div>
-          <div className="bg-white rounded-lg p-2 sm:p-3 border-2 border-green-500 shadow-md">
-            <div className="flex items-center justify-between">
-              <div className="p-1.5 sm:p-2 rounded-lg bg-green-500">
-                <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-              </div>
-              <div className="text-lg sm:text-2xl font-bold text-green-600">
-                {stats.completed}
-              </div>
-            </div>
-            <p className="text-[10px] sm:text-xs font-bold text-[#002147] mt-1 uppercase">Done</p>
-          </div>
-          <div className="bg-white rounded-lg p-2 sm:p-3 border-2 border-[#002147] shadow-md">
-            <div className="flex items-center justify-between">
-              <div className="p-1.5 sm:p-2 rounded-lg bg-[#002147]">
-                <Trash2 className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-              </div>
-              <div className="text-lg sm:text-2xl font-bold text-[#002147]">
-                {stats.deleted}
-              </div>
-            </div>
-            <p className="text-[10px] sm:text-xs font-bold text-[#002147] mt-1 uppercase">Deleted</p>
-          </div>
-          <div className="bg-white rounded-lg p-2 sm:p-3 border-2 border-red-500 shadow-md">
-            <div className="flex items-center justify-between">
-              <div className="p-1.5 sm:p-2 rounded-lg bg-red-500">
-                <BookMarked className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-              </div>
-              <div className="text-base sm:text-xl font-bold text-red-600">
-                {formatMoney(stats.fines, settings)}
-              </div>
-            </div>
-            <p className="text-[10px] sm:text-xs font-bold text-[#002147] mt-1 uppercase">Fines</p>
-          </div>
-        </div>
-
-        {/* Search and Filters */}
-        <div className="bg-white rounded-xl p-2 sm:p-3 border-2 border-[#fe9800] shadow-lg">
-          <div className="flex flex-col gap-2">
-            {/* Top Row: Search + Filter Icon */}
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-[#fe9800]" />
-                <input
-                  type="text"
-                  placeholder="Search..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-9 py-2 border-2 border-gray-200 rounded-lg bg-gray-50 text-gray-800 placeholder-gray-500 focus:ring-2 focus:ring-[#fe9800] focus:border-[#fe9800] outline-none transition-all font-medium text-sm"
-                />
-                {searchQuery && (
-                  <button
-                    onClick={() => setSearchQuery('')}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[#fe9800] hover:text-[#002147]"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-
-              {/* Mobile: Filter Icon */}
-              <button
-                onClick={() => setShowFilters(!showFilters)}
-                className={`md:hidden p-2 rounded-lg border-2 transition-all ${
-                  showFilters || filterType !== 'all' || filterRole !== 'all'
-                    ? 'bg-[#fe9800] text-white border-[#002147]'
-                    : 'bg-white text-[#002147] border-[#002147]'
-                }`}
-                title="Filters"
-              >
-                <Filter className="w-5 h-5" />
-              </button>
+      {/* Search, Filters and Table */}
+      <GlassCard index={4} className="flex min-h-[360px] flex-1 flex-col overflow-hidden">
+        {/* Toolbar */}
+        <div className="flex shrink-0 flex-col gap-2 border-b border-glass-line p-3">
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1 md:max-w-sm">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-muted" />
+              <input
+                type="text"
+                placeholder="Search..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className={cn(ui.input, 'pl-9 pr-9')}
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded-md text-ink-muted transition hover:bg-surface hover:text-ink"
+                >
+                  <X className="size-3.5" />
+                </button>
+              )}
             </div>
 
             {/* Desktop: Always show filters inline */}
-            <div className="hidden md:flex flex-wrap items-center gap-2">
-              <button
-                onClick={() => setFilterType('all')}
-                className={`px-4 py-1.5 rounded-lg font-bold transition-all shadow-md text-sm border-2 ${
-                  filterType === 'all'
-                    ? 'bg-[#fe9800] text-white shadow-lg scale-105 border-[#002147]'
-                    : 'bg-white text-[#002147] border-[#002147] hover:bg-gray-50'
-                }`}
-              >
-                All ({stats.total})
-              </button>
-              <button
-                onClick={() => setFilterType('completed')}
-                className={`px-4 py-1.5 rounded-lg font-bold transition-all shadow-md text-sm border-2 ${
-                  filterType === 'completed'
-                    ? 'bg-green-500 text-white shadow-lg scale-105 border-green-700'
-                    : 'bg-white text-[#002147] border-[#002147] hover:bg-gray-50'
-                }`}
-              >
-                Completed ({stats.completed})
-              </button>
-              <button
-                onClick={() => setFilterType('deleted')}
-                className={`px-4 py-1.5 rounded-lg font-bold transition-all shadow-md text-sm border-2 ${
-                  filterType === 'deleted'
-                    ? 'bg-[#002147] text-white shadow-lg scale-105 border-[#fe9800]'
-                    : 'bg-white text-[#002147] border-[#002147] hover:bg-gray-50'
-                }`}
-              >
-                Deleted ({stats.deleted})
-              </button>
-              <select
+            <div className="hidden flex-wrap items-center gap-2 md:flex">
+              <div className="flex items-center gap-1 rounded-xl border border-edge/80 bg-surface/50 p-1">
+                <button onClick={() => setFilterType('all')} className={segBtn(filterType === 'all')}>
+                  All ({stats.total})
+                </button>
+                <button onClick={() => setFilterType('completed')} className={segBtn(filterType === 'completed')}>
+                  Completed ({stats.completed})
+                </button>
+                <button onClick={() => setFilterType('deleted')} className={segBtn(filterType === 'deleted')}>
+                  Deleted ({stats.deleted})
+                </button>
+              </div>
+              <Select
+                label="Role"
                 value={filterRole}
-                onChange={(e) => setFilterRole(e.target.value)}
-                className="px-4 py-1.5 rounded-lg font-bold transition-all shadow-md text-sm border-2 border-[#002147] bg-white text-[#002147] hover:bg-gray-50 focus:ring-2 focus:ring-[#fe9800] focus:border-[#fe9800] outline-none"
-              >
-                <option value="all">All Roles</option>
-                <option value="student">Students</option>
-                <option value="teacher">Teachers</option>
-              </select>
+                onChange={setFilterRole}
+                options={ROLE_OPTIONS}
+              />
             </div>
 
-            {/* Mobile: Collapsible Filters */}
-            {showFilters && (
-              <div className="md:hidden flex flex-col gap-2 pt-2 border-t border-gray-200">
-                <div className="grid grid-cols-3 gap-1.5">
-                  <button
-                    onClick={() => setFilterType('all')}
-                    className={`px-2 py-2 rounded-lg font-bold transition-all text-xs border-2 ${
-                      filterType === 'all'
-                        ? 'bg-[#fe9800] text-white border-[#002147]'
-                        : 'bg-white text-[#002147] border-[#002147]'
-                    }`}
-                  >
-                    All ({stats.total})
-                  </button>
-                  <button
-                    onClick={() => setFilterType('completed')}
-                    className={`px-2 py-2 rounded-lg font-bold transition-all text-xs border-2 ${
-                      filterType === 'completed'
-                        ? 'bg-green-500 text-white border-green-700'
-                        : 'bg-white text-[#002147] border-[#002147]'
-                    }`}
-                  >
-                    Done ({stats.completed})
-                  </button>
-                  <button
-                    onClick={() => setFilterType('deleted')}
-                    className={`px-2 py-2 rounded-lg font-bold transition-all text-xs border-2 ${
-                      filterType === 'deleted'
-                        ? 'bg-[#002147] text-white border-[#fe9800]'
-                        : 'bg-white text-[#002147] border-[#002147]'
-                    }`}
-                  >
-                    Del ({stats.deleted})
-                  </button>
-                </div>
-                <select
-                  value={filterRole}
-                  onChange={(e) => setFilterRole(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg font-bold text-xs border-2 border-[#002147] bg-white text-[#002147] focus:ring-2 focus:ring-[#fe9800] focus:border-[#fe9800] outline-none"
-                >
-                  <option value="all">All Roles</option>
-                  <option value="student">Students</option>
-                  <option value="teacher">Teachers</option>
-                </select>
-              </div>
-            )}
+            {/* Mobile: Filter Icon */}
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className={cn(
+                'grid size-9 shrink-0 place-items-center rounded-xl border transition md:hidden',
+                showFilters || filterType !== 'all' || filterRole !== 'all'
+                  ? 'border-brand-500 bg-brand-500 text-white'
+                  : 'border-edge/90 bg-surface/70 text-ink-soft hover:text-ink'
+              )}
+              title="Filters"
+            >
+              <Filter className="size-4" />
+            </button>
           </div>
+
+          {/* Mobile: Collapsible Filters */}
+          {showFilters && (
+            <div className="fade-in flex flex-col gap-2 border-t border-glass-line pt-2 md:hidden">
+              <div className="grid grid-cols-3 gap-1 rounded-xl border border-edge/80 bg-surface/50 p-1">
+                <button onClick={() => setFilterType('all')} className={segBtn(filterType === 'all')}>
+                  All ({stats.total})
+                </button>
+                <button onClick={() => setFilterType('completed')} className={segBtn(filterType === 'completed')}>
+                  Done ({stats.completed})
+                </button>
+                <button onClick={() => setFilterType('deleted')} className={segBtn(filterType === 'deleted')}>
+                  Del ({stats.deleted})
+                </button>
+              </div>
+              <Select
+                variant="field"
+                label="Role"
+                value={filterRole}
+                onChange={setFilterRole}
+                options={ROLE_OPTIONS}
+              />
+            </div>
+          )}
         </div>
 
-        {/* Reservations Table */}
-        <div className="bg-white rounded-xl border-2 border-[#fe9800] overflow-hidden shadow-xl flex-1 flex flex-col">
-          <div className="bg-[#002147] px-3 py-1.5 border-b-2 border-[#fe9800]">
-            <h3 className="text-sm font-bold text-white font-serif flex items-center gap-1.5">
-              <BookMarked className="w-4 h-4" />
-              Archived Reservations
-            </h3>
-          </div>
-
-          {/* Mobile Card View */}
-          <div className="md:hidden overflow-y-auto flex-1 p-2 space-y-1.5">
-            {filteredReservations.length === 0 ? (
-              <div className="flex flex-col items-center py-8">
-                <div className="w-14 h-16 bg-[#fe9800] rounded shadow-lg flex items-center justify-center mb-3 border-2 border-[#002147]">
-                  <BookMarked className="w-6 h-6 text-white" />
+        {/* Mobile Card View */}
+        <div className="scroll-quiet min-h-0 flex-1 space-y-1.5 overflow-y-auto p-3 md:hidden">
+          {filteredReservations.length === 0 ? (
+            <EmptyState
+              icon={BookMarked}
+              title="No completed reservations"
+              hint="Try adjusting your filters"
+            />
+          ) : (
+            filteredReservations.map((reservation) => (
+              <div
+                key={reservation.id}
+                className="rounded-xl border border-glass-line bg-surface/50 px-3 py-2"
+              >
+                <div className="mb-1 flex items-center gap-1.5">
+                  <Pill tone={reservation.status === 'deleted' ? 'neutral' : 'success'}>
+                    {reservation.status === 'deleted' ? 'Del' : 'Done'}
+                  </Pill>
+                  <Pill tone={reservation.reserver_role === 'teacher' ? 'brand' : 'info'}>
+                    {reservation.reserver_role === 'teacher' ? 'Teacher' : 'Student'}
+                  </Pill>
+                  <span className="ml-auto text-[10.5px] text-ink-muted">{formatUpdatedAt(reservation.updated_at)}</span>
                 </div>
-                <p className="text-[#002147] text-sm font-serif font-medium text-center">
-                  No completed reservations
-                </p>
-                <p className="text-gray-600 text-xs mt-1 text-center">
-                  Try adjusting your filters
-                </p>
+                <div className="flex items-center gap-2">
+                  <h4 className="truncate text-[13px] font-semibold text-ink">{reservation.reserver_name}</h4>
+                  <span className="text-[11.5px] text-ink-muted">({reservation.reserver_id})</span>
+                </div>
+                <div className="mt-0.5 flex items-center gap-2">
+                  <p className="flex-1 truncate text-[12.5px] font-medium text-ink-soft">{reservation.book_name}</p>
+                  <span className="font-mono text-[11px] text-ink-muted">SR: {reservation.book?.sr_no || reservation.book_sr_no || 'N/A'}</span>
+                </div>
+                <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] text-ink-muted">
+                  <span>
+                    <span className="font-semibold text-ink-soft">Issued:</span> {formatDate(reservation.issue_date)}
+                  </span>
+                  <span>
+                    <span className="font-semibold text-ink-soft">Due:</span> {formatDate(reservation.due_date)}
+                  </span>
+                  <span>
+                    <span className="font-semibold text-ink-soft">Returned:</span> {formatDate(reservation.return_date)}
+                  </span>
+                  {Number(reservation.fine_amount || 0) > 0 && (
+                    <Pill tone={reservation.fine_paid ? 'success' : 'danger'}>
+                      Fine {formatMoney(reservation.fine_amount, settings)}
+                    </Pill>
+                  )}
+                </div>
               </div>
-            ) : (
-              filteredReservations.map((reservation) => (
-                <div
-                  key={reservation.id}
-                  className="bg-gray-50 rounded-lg px-2.5 py-2 border border-gray-200 shadow-sm"
-                >
-                  <div className="flex items-center gap-1.5 mb-0.5">
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                      reservation.status === 'deleted'
-                        ? 'bg-gray-100 text-gray-700'
-                        : 'bg-green-100 text-green-700'
-                    }`}>
-                      {reservation.status === 'deleted' ? 'Del' : 'Done'}
-                    </span>
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-                      reservation.reserver_role === 'teacher'
-                        ? 'bg-purple-100 text-purple-700'
-                        : 'bg-blue-100 text-blue-700'
-                    }`}>
-                      {reservation.reserver_role === 'teacher' ? 'Teacher' : 'Student'}
-                    </span>
-                    <span className="text-[10px] text-gray-400 ml-auto">{formatUpdatedAt(reservation.updated_at)}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <h4 className="text-sm font-bold text-[#002147] truncate">{reservation.reserver_name}</h4>
-                    <span className="text-xs text-gray-500">({reservation.reserver_id})</span>
-                  </div>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <p className="text-xs font-semibold text-[#002147] truncate flex-1">{reservation.book_name}</p>
-                    <span className="text-[10px] text-gray-500">SR: {reservation.book?.sr_no || reservation.book_sr_no || 'N/A'}</span>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-1">
-                    <span className="text-[10px] text-gray-600">
-                      <span className="font-semibold text-[#002147]">Issued:</span> {formatDate(reservation.issue_date)}
-                    </span>
-                    <span className="text-[10px] text-gray-600">
-                      <span className="font-semibold text-[#002147]">Due:</span> {formatDate(reservation.due_date)}
-                    </span>
-                    <span className="text-[10px] text-gray-600">
-                      <span className="font-semibold text-[#002147]">Returned:</span> {formatDate(reservation.return_date)}
-                    </span>
-                    {Number(reservation.fine_amount || 0) > 0 && (
-                      <span className="text-[10px] font-bold text-red-700 bg-red-50 px-1.5 py-0.5 rounded border border-red-200">
-                        Fine {formatMoney(reservation.fine_amount, settings)}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
+            ))
+          )}
+        </div>
 
-          {/* Desktop Table View */}
-          <div className="hidden md:block overflow-x-auto overflow-y-auto flex-1 scrollbar-hide">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b-2 border-[#fe9800] sticky top-0">
+        {/* Desktop Table View */}
+        <div className="scroll-quiet hidden min-h-0 flex-1 overflow-auto md:block">
+          <table className={ui.table}>
+            <thead className={ui.thead}>
+              <tr>
+                <th className={ui.th}>Reserver Info</th>
+                <th className={ui.th}>Book SR No</th>
+                <th className={ui.th}>Book Details</th>
+                <th className={ui.th}>Department</th>
+                <th className={ui.th}>Status</th>
+                <th className={ui.th}>Issue Date</th>
+                <th className={ui.th}>Due Date</th>
+                <th className={ui.th}>Returned</th>
+                <th className={ui.th}>Fine</th>
+                <th className={ui.th}>Updated At</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredReservations.length === 0 ? (
                 <tr>
-                  <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Reserver Info</th>
-                  <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Book SR No</th>
-                  <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Book Details</th>
-                  <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Department</th>
-                  <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Status</th>
-                  <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Issue Date</th>
-                  <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Due Date</th>
-                  <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Returned</th>
-                  <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Fine</th>
-                  <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Updated At</th>
+                  <td colSpan="10">
+                    <EmptyState
+                      icon={BookMarked}
+                      title="No completed reservations found"
+                      hint="Try adjusting your filters or search query"
+                    />
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {filteredReservations.length === 0 ? (
-                  <tr>
-                    <td colSpan="10" className="px-4 py-12 text-center text-gray-500">
-                      <BookMarked className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-                      <p className="font-medium">No completed reservations found</p>
-                      <p className="text-sm">Try adjusting your filters or search query</p>
-                    </td>
-                  </tr>
-                ) : (
-                  filteredReservations.map((reservation, index) => (
-                    <tr key={reservation.id} className={`hover:bg-gray-50 transition-colors ${
-                      index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'
-                    }`}>
-                      <td className="px-3 py-2">
-                        <div className="flex items-center gap-1.5">
-                          <div className="flex flex-col min-w-0">
-                            <span className="font-semibold text-xs text-[#002147] truncate">
-                              {reservation.reserver_name}
-                            </span>
-                            <span className="text-[10px] text-gray-500">
-                              {reservation.reserver_id}
-                            </span>
-                          </div>
-                          <span className={`text-[9px] px-1 py-0.5 rounded whitespace-nowrap flex-shrink-0 ${
-                            reservation.reserver_role === 'teacher'
-                              ? 'bg-purple-100 text-purple-700'
-                              : 'bg-blue-100 text-blue-700'
-                          }`}>
-                            {reservation.reserver_role === 'teacher' ? 'T' : 'S'}
+              ) : (
+                filteredReservations.map((reservation, index) => (
+                  <tr key={reservation.id} className={ui.tr}>
+                    <td className={cn(ui.td, 'py-2')}>
+                      <div className="flex items-center gap-1.5">
+                        <div className="flex min-w-0 flex-col">
+                          <span className="truncate text-[13px] font-semibold text-ink">
+                            {reservation.reserver_name}
+                          </span>
+                          <span className="text-[11.5px] text-ink-muted">
+                            {reservation.reserver_id}
                           </span>
                         </div>
-                      </td>
-                      <td className="px-3 py-2">
-                        <span className="font-mono text-xs text-[#002147] font-semibold">
-                          {reservation.book?.sr_no || reservation.book_sr_no || 'N/A'}
+                        <span className={cn(
+                          'grid size-5 shrink-0 place-items-center rounded-md text-[10px] font-bold',
+                          reservation.reserver_role === 'teacher'
+                            ? 'bg-brand-500/10 text-brand-700'
+                            : 'bg-sky-500/10 text-sky-700'
+                        )}>
+                          {reservation.reserver_role === 'teacher' ? 'T' : 'S'}
                         </span>
-                      </td>
-                      <td className="px-3 py-2 max-w-[200px]">
-                        <div className="flex items-center gap-1.5">
-                          <div className="flex flex-col min-w-0 flex-1">
+                      </div>
+                    </td>
+                    <td className={cn(ui.td, 'py-2')}>
+                      <span className="font-mono text-[12px] font-semibold text-ink">
+                        {reservation.book?.sr_no || reservation.book_sr_no || 'N/A'}
+                      </span>
+                    </td>
+                    <td className={cn(ui.td, 'max-w-[220px] py-2')}>
+                      <div className="flex items-center gap-1.5">
+                        <div className="flex min-w-0 flex-1 flex-col">
+                          <span
+                            className="block truncate text-[13px] font-semibold text-ink"
+                            title={reservation.book_name}
+                          >
+                            {reservation.book_name}
+                          </span>
+                          {reservation.book?.author && (
                             <span
-                              className="font-semibold text-xs text-[#002147] truncate block"
-                              title={reservation.book_name}
+                              className="block truncate text-[11.5px] text-ink-muted"
+                              title={reservation.book.author}
                             >
-                              {reservation.book_name}
-                            </span>
-                            {reservation.book?.author && (
-                              <span
-                                className="text-[10px] text-gray-500 truncate block"
-                                title={reservation.book.author}
-                              >
-                                {reservation.book.author}
-                              </span>
-                            )}
-                          </div>
-                          {reservation.book?.status && (
-                            <span className={`text-[9px] px-1 py-0.5 rounded whitespace-nowrap flex-shrink-0 ${
-                              reservation.book.status === 'Available'
-                                ? 'bg-green-100 text-green-700'
-                                : 'bg-red-100 text-red-700'
-                            }`}>
-                              {reservation.book.status === 'Available' ? 'Avail' : 'Borr'}
+                              {reservation.book.author}
                             </span>
                           )}
                         </div>
-                      </td>
-                      <td className="px-3 py-2 max-w-[120px]">
-                        <span
-                          className="text-[10px] text-gray-600 truncate block"
-                          title={reservation.book?.department || 'N/A'}
-                        >
-                          {reservation.book?.department || 'N/A'}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2">
-                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold ${
-                          reservation.status === 'returned' || reservation.status === 'completed'
-                            ? 'bg-green-100 text-green-700 border border-green-300'
-                            : reservation.status === 'deleted'
-                            ? 'bg-gray-100 text-gray-700 border border-gray-300'
-                            : 'bg-yellow-100 text-yellow-700 border border-yellow-300'
-                        }`}>
-                          {reservation.status.charAt(0).toUpperCase() + reservation.status.slice(1)}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2">
-                        <span className="text-[10px] text-gray-600 whitespace-nowrap">{formatDate(reservation.issue_date)}</span>
-                      </td>
-                      <td className="px-3 py-2">
-                        <span className="text-[10px] text-gray-600 whitespace-nowrap">{formatDate(reservation.due_date)}</span>
-                      </td>
-                      <td className="px-3 py-2">
-                        <span className="text-[10px] text-gray-600 whitespace-nowrap">{formatDate(reservation.return_date)}</span>
-                      </td>
-                      <td className="px-3 py-2">
-                        {Number(reservation.fine_amount || 0) > 0 ? (
-                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border whitespace-nowrap ${
-                            reservation.fine_paid
-                              ? 'text-green-700 bg-green-50 border-green-200'
-                              : 'text-red-700 bg-red-50 border-red-200'
-                          }`}>
-                            {formatMoney(reservation.fine_amount, settings)}{reservation.fine_paid ? ' • paid' : ''}
+                        {reservation.book?.status && (
+                          <span className={cn(
+                            'shrink-0 whitespace-nowrap rounded-md px-1.5 py-0.5 text-[10px] font-semibold',
+                            reservation.book.status === 'Available'
+                              ? 'bg-emerald-500/10 text-emerald-700'
+                              : 'bg-rose-500/10 text-rose-700'
+                          )}>
+                            {reservation.book.status === 'Available' ? 'Avail' : 'Borr'}
                           </span>
-                        ) : (
-                          <span className="text-[10px] text-gray-400">-</span>
                         )}
-                      </td>
-                      <td className="px-3 py-2">
-                        <span className="text-[10px] text-gray-600">{formatUpdatedAt(reservation.updated_at)}</span>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Footer with Count */}
-          <div className="px-2 md:px-4 py-2 md:py-3 bg-gray-50 border-t-2 border-[#002147]">
-            <p className="text-[10px] md:text-sm text-gray-600">
-              Showing <span className="font-semibold text-[#002147]">{filteredReservations.length}</span> of{' '}
-              <span className="font-semibold text-[#002147]">{reservations.length}</span> completed reservations
-            </p>
-          </div>
+                      </div>
+                    </td>
+                    <td className={cn(ui.td, 'max-w-[140px] py-2')}>
+                      <span
+                        className="block truncate text-[12px]"
+                        title={reservation.book?.department || 'N/A'}
+                      >
+                        {reservation.book?.department || 'N/A'}
+                      </span>
+                    </td>
+                    <td className={cn(ui.td, 'py-2')}>
+                      <Pill tone={
+                        reservation.status === 'returned' || reservation.status === 'completed'
+                          ? 'success'
+                          : reservation.status === 'deleted'
+                          ? 'neutral'
+                          : 'warning'
+                      }>
+                        {reservation.status.charAt(0).toUpperCase() + reservation.status.slice(1)}
+                      </Pill>
+                    </td>
+                    <td className={cn(ui.td, 'py-2')}>
+                      <span className="whitespace-nowrap text-[12px]">{formatDate(reservation.issue_date)}</span>
+                    </td>
+                    <td className={cn(ui.td, 'py-2')}>
+                      <span className="whitespace-nowrap text-[12px]">{formatDate(reservation.due_date)}</span>
+                    </td>
+                    <td className={cn(ui.td, 'py-2')}>
+                      <span className="whitespace-nowrap text-[12px]">{formatDate(reservation.return_date)}</span>
+                    </td>
+                    <td className={cn(ui.td, 'py-2')}>
+                      {Number(reservation.fine_amount || 0) > 0 ? (
+                        <Pill tone={reservation.fine_paid ? 'success' : 'danger'}>
+                          {formatMoney(reservation.fine_amount, settings)}{reservation.fine_paid ? ' • paid' : ''}
+                        </Pill>
+                      ) : (
+                        <span className="text-[12px] text-ink-muted/70">-</span>
+                      )}
+                    </td>
+                    <td className={cn(ui.td, 'py-2')}>
+                      <span className="whitespace-nowrap text-[11.5px] text-ink-muted">{formatUpdatedAt(reservation.updated_at)}</span>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
-      </div>
+
+        {/* Footer with Count */}
+        <div className="shrink-0 border-t border-glass-line px-4 py-2">
+          <p className="text-[12px] text-ink-muted">
+            Showing <span className="font-semibold text-ink">{filteredReservations.length}</span> of{' '}
+            <span className="font-semibold text-ink">{reservations.length}</span> completed reservations
+          </p>
+        </div>
+      </GlassCard>
     </div>
   )
 }

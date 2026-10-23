@@ -1,10 +1,17 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { BookOpen, Lock, User, Eye, EyeOff, Loader2 } from "lucide-react";
-import toast, { Toaster } from "react-hot-toast";
+import { BookOpenCheck, Eye, EyeOff, Library, Loader2, Lock, User, Wallet } from "lucide-react";
+import toast from "react-hot-toast";
 import Loader from "@/components/Loader";
-import Image from "next/image";
+import Logo from "@/components/ui/Logo";
+import { ui } from "@/components/ui/glass";
+
+const HIGHLIGHTS = [
+  { icon: Library, text: "Full book catalogue across every department" },
+  { icon: BookOpenCheck, text: "Issue, return and reservation tracking" },
+  { icon: Wallet, text: "Overdue fines recorded and collected" },
+];
 
 export default function LoginPage() {
   const router = useRouter();
@@ -74,62 +81,60 @@ export default function LoginPage() {
   if (loading) return <Loader />;
 
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-900 flex items-center justify-center p-4">
-      <Toaster position="top-right" />
+    <main className="flex min-h-screen items-center justify-center px-4 py-8">
+      <div className="glass-strong rise grid w-full max-w-[400px] overflow-hidden rounded-3xl md:max-w-3xl md:grid-cols-[1fr_1fr]">
+        {/* Brand side */}
+        <section className="relative hidden flex-col justify-between gap-8 overflow-hidden p-7 md:flex">
+          <div aria-hidden="true" className="absolute -top-20 -left-20 size-64 rounded-full bg-brand-200/50 blur-3xl" />
+          <div aria-hidden="true" className="absolute -right-12 -bottom-20 size-72 rounded-full bg-sky-200/60 blur-3xl" />
 
-      <div className="w-full max-w-md relative z-10">
-        {/* Logo & Title */}
-        <div className="text-center mb-7">
-         
+          <Logo size="md" className="relative" />
 
-          <div className="inline-flex items-center justify-center w-20 h-20" >
-            <Image
-              src="/logo1.jpg"
-              alt="Logo"
-              width={40}
-              height={40}
-              className="w-20 h-20 object-contain rounded-2xl "
-            />
-          </div>
-          <h1 className="text-3xl font-bold text-[#002147] dark:text-[#fe9800] mb-2 font-serif tracking-wide">
-            Thal University
-          </h1>
-          <p className="text-gray-700 dark:text-gray-300 font-medium text-base">
-            Library Management System
-          </p>
-          <div className="mt-3 inline-block px-4 py-1 bg-gray-100 dark:bg-gray-800 rounded-full border-2 border-[#002147] dark:border-[#fe9800]">
-            <p className="text-xs text-[#002147] dark:text-[#fe9800] font-semibold">
-              Knowledge is the foundation of excellence
+          <div className="relative">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-brand-600">
+              Library Management System
             </p>
+            <h1 className="mt-2 text-2xl font-bold leading-tight text-heading">
+              Every book, loan and
+              <br />
+              fine in one place.
+            </h1>
+            <ul className="mt-5 space-y-2.5">
+              {HIGHLIGHTS.map(({ icon: Icon, text }) => (
+                <li key={text} className="flex items-center gap-2.5 text-[13px] text-ink-soft">
+                  <span className="glass grid size-8 shrink-0 place-items-center rounded-xl text-brand-600">
+                    <Icon className="size-4" aria-hidden="true" />
+                  </span>
+                  {text}
+                </li>
+              ))}
+            </ul>
           </div>
-        </div>
 
-        {/* Login Card */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border-2 border-[#002147] dark:border-[#fe9800] overflow-hidden">
-          {/* Header */}
-          <div className="bg-[#002147] dark:bg-[#fe9800] py-4 px-6">
-            <h2 className="text-xl font-bold text-white text-center font-serif flex items-center justify-center gap-2">
-              <Lock className="w-6 h-6" />
-              Admin Login
-            </h2>
-          </div>
+          <p className="relative text-[11px] text-ink-muted">Central Library &middot; Thal University Bhakkar</p>
+        </section>
 
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="p-7 space-y-5">
+        {/* Form side */}
+        <section className="flex flex-col justify-center bg-surface/45 p-6 sm:p-7 md:border-l md:border-edge/70">
+          <Logo size="sm" className="mb-6 md:hidden" />
+
+          <h2 className="text-xl font-bold text-heading">Welcome back</h2>
+          <p className="mt-1 text-[13px] text-ink-muted">Sign in to the library admin panel.</p>
+
+          <form onSubmit={handleSubmit} className="mt-5 space-y-3.5">
             <div>
-              <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide">
-                Username *
+              <label htmlFor="username" className={ui.label}>
+                Username
               </label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[#fe9800]" />
+                <User className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-ink-muted" aria-hidden="true" />
                 <input
+                  id="username"
                   type="text"
                   required
                   value={formData.username}
-                  onChange={(e) =>
-                    setFormData({ ...formData, username: e.target.value })
-                  }
-                  className="w-full pl-11 pr-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-[#fe9800] focus:border-[#fe9800] outline-none transition-all font-medium"
+                  onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                  className={`${ui.input} h-10 pl-9`}
                   placeholder="Enter your username"
                   autoComplete="username"
                 />
@@ -137,84 +142,47 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide">
-                Password *
+              <label htmlFor="password" className={ui.label}>
+                Password
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[#fe9800]" />
+                <Lock className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-ink-muted" aria-hidden="true" />
                 <input
+                  id="password"
                   type={showPassword ? "text" : "password"}
                   required
                   value={formData.password}
-                  onChange={(e) =>
-                    setFormData({ ...formData, password: e.target.value })
-                  }
-                  className="w-full pl-11 pr-11 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-[#fe9800] focus:border-[#fe9800] outline-none transition-all font-medium"
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  className={`${ui.input} h-10 pl-9 pr-10`}
                   placeholder="Enter your password"
                   autoComplete="current-password"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#fe9800] hover:text-[#002147]"
+                  className="absolute top-1/2 right-1.5 grid size-7 -translate-y-1/2 place-items-center rounded-lg text-ink-muted hover:bg-surface/80 hover:text-ink"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
                 >
-                  {showPassword ? (
-                    <EyeOff className="w-5 h-5" />
-                  ) : (
-                    <Eye className="w-5 h-5" />
-                  )}
+                  {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                 </button>
               </div>
             </div>
 
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  className="w-4 h-4 text-[#fe9800] border-gray-300 rounded focus:ring-[#fe9800]"
-                />
-                <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">
-                  Remember me
-                </span>
-              </label>
-            </div>
-
-            <button
-              type="submit"
-              disabled={submitting}
-              className="w-full py-3.5 bg-[#fe9800] dark:bg-[#002147] text-white rounded-lg font-bold hover:shadow-xl hover:scale-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 border-2 border-[#002147] dark:border-[#fe9800]"
-            >
+            <button type="submit" disabled={submitting} className={`${ui.btnPrimary} h-10 w-full`}>
               {submitting ? (
                 <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  Authenticating...
+                  <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                  Signing in…
                 </>
               ) : (
-                <>
-                  <Lock className="w-5 h-5" />
-                  Access Library System
-                </>
+                "Sign in"
               )}
             </button>
 
-            <div className="text-center pt-3 border-t border-gray-200 dark:border-gray-700">
-              <p className="text-xs text-gray-600 dark:text-gray-400 italic">
-                Authorized personnel only
-              </p>
-            </div>
+            <p className="pt-1 text-center text-[11.5px] text-ink-muted">Authorized library staff only</p>
           </form>
-        </div>
-
-        {/* Footer */}
-        <div className="text-center mt-6 space-y-1.5">
-          <p className="text-sm text-gray-700 dark:text-gray-300 font-medium">
-            © 2025 Thal University. All rights reserved.
-          </p>
-          <p className="text-xs text-gray-600 dark:text-gray-400">
-            Empowering minds through knowledge
-          </p>
-        </div>
+        </section>
       </div>
-    </div>
+    </main>
   );
 }

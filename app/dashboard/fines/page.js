@@ -1,9 +1,11 @@
 'use client'
 import { useEffect, useState } from 'react'
-import Header from '@/components/Header'
 import Loader from '@/components/Loader'
 import { Search, X, Filter, Wallet, AlertTriangle, CheckCircle, Clock, BadgeDollarSign } from 'lucide-react'
-import toast, { Toaster } from 'react-hot-toast'
+import toast from 'react-hot-toast'
+import { GlassCard, CardHeader, StatCard, Pill, Modal, EmptyState as GlassEmptyState, ui } from '@/components/ui/glass'
+import Select from '@/components/ui/Select'
+import { cn } from '@/lib/utils'
 import {
   getLibrarySettings,
   fetchReservationsList,
@@ -14,6 +16,8 @@ import {
   formatMoney,
   today
 } from '@/lib/librarySettings'
+
+const ROLE_OPTIONS = [['all', 'All Roles'], ['student', 'Students'], ['teacher', 'Teachers']]
 
 /** Statuses that mean the loan is closed, so its fine is settled at a fixed amount. */
 const ARCHIVED_STATUSES = ['returned', 'completed', 'deleted']
@@ -138,10 +142,11 @@ export default function FineRecordsPage() {
     accruingTotal: sum(fineRows.filter(r => r.state === 'accruing'))
   }
 
+  // Pill tone for each state
   const stateStyles = {
-    unpaid: 'bg-red-100 text-red-700 border-red-300',
-    paid: 'bg-green-100 text-green-700 border-green-300',
-    accruing: 'bg-orange-100 text-orange-700 border-orange-300'
+    unpaid: 'danger',
+    paid: 'success',
+    accruing: 'warning'
   }
 
   const stateLabels = {
@@ -151,227 +156,195 @@ export default function FineRecordsPage() {
   }
 
   const filterButtons = [
-    { key: 'unpaid', label: 'Unpaid', count: stats.unpaid, active: 'bg-red-600 text-white border-red-800' },
-    { key: 'paid', label: 'Paid', count: stats.paid, active: 'bg-green-500 text-white border-green-700' },
-    { key: 'accruing', label: 'Accruing', count: stats.accruing, active: 'bg-orange-500 text-white border-orange-700' },
-    { key: 'all', label: 'All', count: stats.all, active: 'bg-[#fe9800] text-white border-[#002147]' }
+    { key: 'unpaid', label: 'Unpaid', count: stats.unpaid, active: 'bg-rose-500/12 text-rose-700 ring-rose-500/30' },
+    { key: 'paid', label: 'Paid', count: stats.paid, active: 'bg-emerald-500/12 text-emerald-700 ring-emerald-500/30' },
+    { key: 'accruing', label: 'Accruing', count: stats.accruing, active: 'bg-amber-500/14 text-amber-700 ring-amber-500/30' },
+    { key: 'all', label: 'All', count: stats.all, active: 'bg-brand-500/12 text-brand-700 ring-brand-500/30' }
   ]
 
-  if (loading) return <Loader />
+  if (loading) return <Loader inline />
 
   return (
-    <div className="h-screen overflow-hidden bg-white flex flex-col">
-      <Toaster position="top-right" />
-      <Header title="Fine Records" />
-
-      <div className="flex-1 overflow-y-auto p-2 sm:p-3 space-y-2">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="scroll-quiet flex min-h-0 flex-1 flex-col gap-3 overflow-auto md:overflow-hidden">
         {/* Money at a glance */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          <div className="bg-white rounded-lg p-2 sm:p-3 border-2 border-red-500 shadow-md">
-            <div className="flex items-center justify-between">
-              <div className="p-1.5 sm:p-2 rounded-lg bg-red-500">
-                <Wallet className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-              </div>
-              <div className="text-base sm:text-xl font-bold text-red-600">
-                {formatMoney(stats.outstanding, settings)}
-              </div>
-            </div>
-            <p className="text-[10px] sm:text-xs font-bold text-[#002147] mt-1 uppercase">
-              Outstanding ({stats.unpaid})
-            </p>
-          </div>
-
-          <div className="bg-white rounded-lg p-2 sm:p-3 border-2 border-green-500 shadow-md">
-            <div className="flex items-center justify-between">
-              <div className="p-1.5 sm:p-2 rounded-lg bg-green-500">
-                <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-              </div>
-              <div className="text-base sm:text-xl font-bold text-green-600">
-                {formatMoney(stats.collected, settings)}
-              </div>
-            </div>
-            <p className="text-[10px] sm:text-xs font-bold text-[#002147] mt-1 uppercase">
-              Collected ({stats.paid})
-            </p>
-          </div>
-
-          <div className="bg-white rounded-lg p-2 sm:p-3 border-2 border-orange-500 shadow-md">
-            <div className="flex items-center justify-between">
-              <div className="p-1.5 sm:p-2 rounded-lg bg-orange-500">
-                <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-              </div>
-              <div className="text-base sm:text-xl font-bold text-orange-600">
-                {formatMoney(stats.accruingTotal, settings)}
-              </div>
-            </div>
-            <p className="text-[10px] sm:text-xs font-bold text-[#002147] mt-1 uppercase">
-              Accruing ({stats.accruing})
-            </p>
-          </div>
-
-          <div className="bg-white rounded-lg p-2 sm:p-3 border-2 border-[#fe9800] shadow-md">
-            <div className="flex items-center justify-between">
-              <div className="p-1.5 sm:p-2 rounded-lg bg-[#fe9800]">
-                <BadgeDollarSign className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-              </div>
-              <div className="text-base sm:text-xl font-bold text-[#002147]">
-                {formatMoney(settings.fine_per_day, settings)}
-              </div>
-            </div>
-            <p className="text-[10px] sm:text-xs font-bold text-[#002147] mt-1 uppercase">Per Day</p>
-          </div>
+        <div className="grid shrink-0 grid-cols-2 gap-3 xl:grid-cols-4">
+          <StatCard
+            icon={Wallet}
+            label={`Outstanding (${stats.unpaid})`}
+            value={formatMoney(stats.outstanding, settings)}
+            tone="danger"
+            index={0}
+          />
+          <StatCard
+            icon={CheckCircle}
+            label={`Collected (${stats.paid})`}
+            value={formatMoney(stats.collected, settings)}
+            tone="success"
+            index={1}
+          />
+          <StatCard
+            icon={Clock}
+            label={`Accruing (${stats.accruing})`}
+            value={formatMoney(stats.accruingTotal, settings)}
+            tone="brand"
+            index={2}
+          />
+          <StatCard
+            icon={BadgeDollarSign}
+            label="Per Day"
+            value={formatMoney(settings.fine_per_day, settings)}
+            tone="navy"
+            index={3}
+          />
         </div>
 
         {/* Search and Filters */}
-        <div className="bg-white rounded-xl p-2 sm:p-3 border-2 border-[#fe9800] shadow-lg">
+        <GlassCard index={4} className="shrink-0 p-3">
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-2">
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-[#fe9800]" />
+                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-muted" />
                 <input
                   type="text"
                   placeholder="Search by name, roll no, book or SR no..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-9 py-2 border-2 border-gray-200 rounded-lg bg-gray-50 text-gray-800 placeholder-gray-500 focus:ring-2 focus:ring-[#fe9800] focus:border-[#fe9800] outline-none transition-all font-medium text-sm"
+                  className={cn(ui.input, 'pl-9 pr-9')}
                 />
                 {searchQuery && (
                   <button
                     onClick={() => setSearchQuery('')}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[#fe9800] hover:text-[#002147]"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-ink-muted transition-colors hover:text-ink"
                   >
-                    <X className="w-4 h-4" />
+                    <X className="size-4" />
                   </button>
                 )}
               </div>
 
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className={`md:hidden p-2 rounded-lg border-2 transition-all ${
+                className={cn(
+                  'grid size-9 shrink-0 place-items-center rounded-xl border transition-colors md:hidden',
                   showFilters || filterState !== 'unpaid' || filterRole !== 'all'
-                    ? 'bg-[#fe9800] text-white border-[#002147]'
-                    : 'bg-white text-[#002147] border-[#002147]'
-                }`}
+                    ? 'border-brand-400 bg-brand-500/10 text-brand-600'
+                    : 'border-edge/90 bg-surface/70 text-ink-soft hover:bg-surface hover:text-ink'
+                )}
                 title="Filters"
               >
-                <Filter className="w-5 h-5" />
+                <Filter className="size-4" />
               </button>
             </div>
 
             {/* Desktop filters */}
-            <div className="hidden md:flex flex-wrap items-center gap-2">
-              {filterButtons.map(button => (
-                <button
-                  key={button.key}
-                  onClick={() => setFilterState(button.key)}
-                  className={`px-4 py-1.5 rounded-lg font-bold transition-all shadow-md text-sm border-2 ${
-                    filterState === button.key
-                      ? `${button.active} shadow-lg scale-105`
-                      : 'bg-white text-[#002147] border-[#002147] hover:bg-gray-50'
-                  }`}
-                >
-                  {button.label} ({button.count})
-                </button>
-              ))}
-              <select
+            <div className="hidden flex-wrap items-center gap-2 md:flex">
+              <div className="flex flex-wrap items-center gap-1 rounded-xl bg-surface/50 p-1 ring-1 ring-glass-line">
+                {filterButtons.map(button => (
+                  <button
+                    key={button.key}
+                    onClick={() => setFilterState(button.key)}
+                    className={cn(
+                      'inline-flex h-7 items-center gap-1.5 rounded-lg px-3 text-[12px] font-semibold transition-colors',
+                      filterState === button.key
+                        ? `${button.active} ring-1`
+                        : 'text-ink-soft hover:bg-surface/80 hover:text-ink'
+                    )}
+                  >
+                    {button.label}
+                    <span className="tabular-nums opacity-70">{button.count}</span>
+                  </button>
+                ))}
+              </div>
+              <Select
+                label="Role"
                 value={filterRole}
-                onChange={(e) => setFilterRole(e.target.value)}
-                className="px-4 py-1.5 rounded-lg font-bold transition-all shadow-md text-sm border-2 border-[#002147] bg-white text-[#002147] hover:bg-gray-50 focus:ring-2 focus:ring-[#fe9800] focus:border-[#fe9800] outline-none"
-              >
-                <option value="all">All Roles</option>
-                <option value="student">Students</option>
-                <option value="teacher">Teachers</option>
-              </select>
+                onChange={setFilterRole}
+                options={ROLE_OPTIONS}
+              />
             </div>
 
             {/* Mobile filters */}
             {showFilters && (
-              <div className="md:hidden flex flex-col gap-2 pt-2 border-t border-gray-200">
+              <div className="fade-in flex flex-col gap-2 border-t border-glass-line pt-2 md:hidden">
                 <div className="grid grid-cols-4 gap-1.5">
                   {filterButtons.map(button => (
                     <button
                       key={button.key}
                       onClick={() => setFilterState(button.key)}
-                      className={`px-2 py-2 rounded-lg font-bold transition-all text-xs border-2 ${
+                      className={cn(
+                        'rounded-lg px-1.5 py-1.5 text-[11px] font-semibold transition-colors',
                         filterState === button.key
-                          ? button.active
-                          : 'bg-white text-[#002147] border-[#002147]'
-                      }`}
+                          ? `${button.active} ring-1`
+                          : 'bg-surface/60 text-ink-soft ring-1 ring-glass-line'
+                      )}
                     >
                       {button.label} ({button.count})
                     </button>
                   ))}
                 </div>
-                <select
+                <Select
+                  variant="field"
+                  label="Role"
                   value={filterRole}
-                  onChange={(e) => setFilterRole(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg font-bold text-xs border-2 border-[#002147] bg-white text-[#002147] focus:ring-2 focus:ring-[#fe9800] focus:border-[#fe9800] outline-none"
-                >
-                  <option value="all">All Roles</option>
-                  <option value="student">Students</option>
-                  <option value="teacher">Teachers</option>
-                </select>
+                  onChange={setFilterRole}
+                  options={ROLE_OPTIONS}
+                />
               </div>
             )}
           </div>
-        </div>
+        </GlassCard>
 
         {/* Fines table */}
-        <div className="bg-white rounded-xl border-2 border-[#fe9800] overflow-hidden shadow-xl flex-1 flex flex-col">
-          <div className="bg-[#002147] px-3 py-1.5 border-b-2 border-[#fe9800]">
-            <h3 className="text-sm font-bold text-white font-serif flex items-center gap-1.5">
-              <Wallet className="w-4 h-4" />
-              Fine Records
-            </h3>
-          </div>
+        <GlassCard index={5} className="flex min-h-[320px] shrink-0 flex-col overflow-hidden md:min-h-0 md:flex-1 md:shrink">
+          <CardHeader title="Fine Records" subtitle="Late returns and the fines they carry" className="border-b border-glass-line">
+            <span className="grid size-8 place-items-center rounded-xl bg-brand-500/10 text-brand-600">
+              <Wallet className="size-4" aria-hidden="true" />
+            </span>
+          </CardHeader>
 
           {/* Mobile card view */}
-          <div className="md:hidden overflow-y-auto flex-1 p-2 space-y-1.5">
+          <div className="scroll-quiet flex-1 space-y-1.5 overflow-y-auto p-2.5 md:hidden">
             {filteredRows.length === 0 ? (
               <EmptyState />
             ) : (
               filteredRows.map(row => (
                 <div
                   key={row.id}
-                  className="bg-gray-50 rounded-lg px-2.5 py-2 border border-gray-200 shadow-sm"
+                  className="rounded-xl border border-glass-line bg-surface/50 px-3 py-2"
                 >
-                  <div className="flex items-center gap-1.5 mb-0.5">
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${stateStyles[row.state]}`}>
+                  <div className="mb-1 flex items-center gap-1.5">
+                    <Pill tone={stateStyles[row.state]}>
                       {stateLabels[row.state]}
-                    </span>
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-                      row.reserver_role === 'teacher'
-                        ? 'bg-purple-100 text-purple-700'
-                        : 'bg-blue-100 text-blue-700'
-                    }`}>
+                    </Pill>
+                    <Pill tone={row.reserver_role === 'teacher' ? 'brand' : 'info'}>
                       {row.reserver_role === 'teacher' ? 'Teacher' : 'Student'}
-                    </span>
+                    </Pill>
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <h4 className="text-sm font-bold text-[#002147] truncate">{row.reserver_name}</h4>
-                    <span className="text-xs text-gray-500">({row.reserver_id})</span>
+                    <h4 className="truncate text-[13px] font-semibold text-ink">{row.reserver_name}</h4>
+                    <span className="text-[11.5px] text-ink-muted">({row.reserver_id})</span>
                   </div>
 
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <p className="text-xs font-semibold text-[#002147] truncate flex-1">{row.book_name}</p>
-                    <span className="text-[10px] text-gray-500">
+                  <div className="mt-0.5 flex items-center gap-2">
+                    <p className="flex-1 truncate text-[12px] font-medium text-ink-soft">{row.book_name}</p>
+                    <span className="font-mono text-[11px] text-ink-muted">
                       SR: {row.book?.sr_no || row.book_sr_no || 'N/A'}
                     </span>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-1">
-                    <span className="text-[10px] text-gray-600">
-                      <span className="font-semibold text-[#002147]">Due:</span> {formatDate(row.due_date)}
+                  <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-0.5">
+                    <span className="text-[11px] text-ink-muted">
+                      <span className="font-semibold text-ink-soft">Due:</span> {formatDate(row.due_date)}
                     </span>
-                    <span className="text-[10px] text-gray-600">
-                      <span className="font-semibold text-[#002147]">Returned:</span> {formatDate(row.return_date)}
+                    <span className="text-[11px] text-ink-muted">
+                      <span className="font-semibold text-ink-soft">Returned:</span> {formatDate(row.return_date)}
                     </span>
-                    <span className="text-[10px] text-red-600 font-semibold">{row.fine.days}d late</span>
+                    <span className="text-[11px] font-semibold text-rose-600">{row.fine.days}d late</span>
                   </div>
 
-                  <div className="flex items-center justify-between gap-2 mt-1.5 pt-1.5 border-t border-gray-200">
-                    <span className={`text-sm font-bold ${row.state === 'paid' ? 'text-green-700' : 'text-red-700'}`}>
+                  <div className="mt-1.5 flex items-center justify-between gap-2 border-t border-glass-line pt-1.5">
+                    <span className={cn('text-[13px] font-bold tabular-nums', row.state === 'paid' ? 'text-emerald-700' : 'text-rose-700')}>
                       {formatMoney(row.fine.amount, settings)}
                     </span>
                     <PaymentAction row={row} onPay={openPaymentModal} />
@@ -382,100 +355,100 @@ export default function FineRecordsPage() {
           </div>
 
           {/* Desktop table view */}
-          <div className="hidden md:block overflow-x-auto overflow-y-auto flex-1 scrollbar-hide">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b-2 border-[#fe9800] sticky top-0">
+          <div className="scroll-quiet hidden min-h-0 flex-1 overflow-auto md:block">
+            <table className={ui.table}>
+              <thead className={ui.thead}>
                 <tr>
-                  <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Borrower</th>
-                  <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Book SR No</th>
-                  <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Book</th>
-                  <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Due Date</th>
-                  <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Returned</th>
-                  <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Days Late</th>
-                  <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Fine</th>
-                  <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Payment</th>
-                  <th className="px-3 py-2 text-center text-xs font-bold text-[#002147] uppercase tracking-tight">Action</th>
+                  <th className={ui.th}>Borrower</th>
+                  <th className={ui.th}>Book SR No</th>
+                  <th className={ui.th}>Book</th>
+                  <th className={ui.th}>Due Date</th>
+                  <th className={ui.th}>Returned</th>
+                  <th className={ui.th}>Days Late</th>
+                  <th className={ui.th}>Fine</th>
+                  <th className={ui.th}>Payment</th>
+                  <th className={ui.th.replace('text-left', 'text-center')}>Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
+              <tbody>
                 {filteredRows.length === 0 ? (
                   <tr>
-                    <td colSpan="9" className="px-4 py-12 text-center">
+                    <td colSpan="9" className="px-4 py-6 text-center">
                       <EmptyState />
                     </td>
                   </tr>
                 ) : (
                   filteredRows.map((row, index) => (
-                    <tr key={row.id} className={`hover:bg-gray-50 transition-colors ${
-                      index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'
-                    }`}>
+                    <tr key={row.id} className={ui.tr}>
                       <td className="px-3 py-2">
                         <div className="flex items-center gap-1.5">
-                          <div className="flex flex-col min-w-0">
-                            <span className="font-semibold text-xs text-[#002147] truncate">
+                          <div className="flex min-w-0 flex-col">
+                            <span className="truncate text-[13px] font-semibold text-ink">
                               {row.reserver_name}
                             </span>
-                            <span className="text-[10px] text-gray-500">{row.reserver_id}</span>
+                            <span className="text-[11px] text-ink-muted">{row.reserver_id}</span>
                           </div>
-                          <span className={`text-[9px] px-1 py-0.5 rounded whitespace-nowrap flex-shrink-0 ${
+                          <span className={cn(
+                            'shrink-0 whitespace-nowrap rounded-md px-1.5 py-0.5 text-[10px] font-semibold',
                             row.reserver_role === 'teacher'
-                              ? 'bg-purple-100 text-purple-700'
-                              : 'bg-blue-100 text-blue-700'
-                          }`}>
+                              ? 'bg-brand-500/10 text-brand-700'
+                              : 'bg-sky-500/10 text-sky-700'
+                          )}>
                             {row.reserver_role === 'teacher' ? 'T' : 'S'}
                           </span>
                         </div>
                       </td>
                       <td className="px-3 py-2">
-                        <span className="font-mono text-xs text-[#002147] font-semibold">
+                        <span className="font-mono text-[12px] font-semibold text-ink-soft">
                           {row.book?.sr_no || row.book_sr_no || 'N/A'}
                         </span>
                       </td>
-                      <td className="px-3 py-2 max-w-[200px]">
-                        <div className="flex flex-col min-w-0">
-                          <span className="font-semibold text-xs text-[#002147] truncate block" title={row.book_name}>
+                      <td className="max-w-[220px] px-3 py-2">
+                        <div className="flex min-w-0 flex-col">
+                          <span className="block truncate text-[13px] font-medium text-ink" title={row.book_name}>
                             {row.book_name}
                           </span>
                           {row.book?.author && (
-                            <span className="text-[10px] text-gray-500 truncate block" title={row.book.author}>
+                            <span className="block truncate text-[11px] text-ink-muted" title={row.book.author}>
                               {row.book.author}
                             </span>
                           )}
                         </div>
                       </td>
                       <td className="px-3 py-2">
-                        <span className="text-[10px] text-red-600 font-semibold whitespace-nowrap">
+                        <span className="whitespace-nowrap text-[12px] font-medium text-rose-600">
                           {formatDate(row.due_date)}
                         </span>
                       </td>
                       <td className="px-3 py-2">
                         {row.return_date ? (
-                          <span className="text-[10px] text-gray-600 whitespace-nowrap">
+                          <span className="whitespace-nowrap text-[12px] text-ink-soft">
                             {formatDate(row.return_date)}
                           </span>
                         ) : (
-                          <span className="text-[10px] text-orange-600 font-semibold whitespace-nowrap">
+                          <span className="whitespace-nowrap text-[12px] font-semibold text-amber-600">
                             Still out
                           </span>
                         )}
                       </td>
                       <td className="px-3 py-2">
-                        <span className="text-[10px] font-bold text-red-600">{row.fine.days}d</span>
+                        <span className="text-[12px] font-semibold tabular-nums text-rose-600">{row.fine.days}d</span>
                       </td>
                       <td className="px-3 py-2">
-                        <span className={`text-xs font-bold whitespace-nowrap ${
-                          row.state === 'paid' ? 'text-green-700' : 'text-red-700'
-                        }`}>
+                        <span className={cn(
+                          'whitespace-nowrap text-[13px] font-bold tabular-nums',
+                          row.state === 'paid' ? 'text-emerald-700' : 'text-rose-700'
+                        )}>
                           {formatMoney(row.fine.amount, settings)}
                         </span>
                       </td>
                       <td className="px-3 py-2">
-                        <div className="flex flex-col">
-                          <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded border w-fit ${stateStyles[row.state]}`}>
+                        <div className="flex flex-col items-start gap-0.5">
+                          <Pill tone={stateStyles[row.state]}>
                             {stateLabels[row.state]}
-                          </span>
+                          </Pill>
                           {row.state === 'paid' && row.fine_paid_at && (
-                            <span className="text-[9px] text-gray-500 mt-0.5">
+                            <span className="text-[10.5px] text-ink-muted">
                               {formatDate(row.fine_paid_at)}
                             </span>
                           )}
@@ -494,98 +467,96 @@ export default function FineRecordsPage() {
           </div>
 
           {/* Footer */}
-          <div className="px-2 md:px-4 py-2 md:py-3 bg-gray-50 border-t-2 border-[#002147] flex flex-wrap items-center justify-between gap-2">
-            <p className="text-[10px] md:text-sm text-gray-600">
-              Showing <span className="font-semibold text-[#002147]">{filteredRows.length}</span> of{' '}
-              <span className="font-semibold text-[#002147]">{fineRows.length}</span> fine record(s)
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-glass-line px-3.5 py-2">
+            <p className="text-[12px] text-ink-muted">
+              Showing <span className="font-semibold text-ink">{filteredRows.length}</span> of{' '}
+              <span className="font-semibold text-ink">{fineRows.length}</span> fine record(s)
             </p>
-            <p className="text-[10px] md:text-sm text-gray-600">
+            <p className="text-[12px] text-ink-muted">
               Shown total:{' '}
-              <span className="font-bold text-[#002147]">{formatMoney(sum(filteredRows), settings)}</span>
+              <span className="font-bold tabular-nums text-ink">{formatMoney(sum(filteredRows), settings)}</span>
             </p>
           </div>
-        </div>
+        </GlassCard>
       </div>
 
       {/* Record Payment Modal */}
       {selected && (() => {
         const fine = fineFor(selected)
         return (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg max-w-md w-full border-2 border-green-500 shadow-2xl">
-              <div className="p-6">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center border-2 border-green-500">
-                    <Wallet className="w-6 h-6 text-green-600" />
+          <Modal
+            onClose={saving ? undefined : () => setSelected(null)}
+            title="Record Payment"
+            subtitle="Collect this fine at the counter"
+            icon={Wallet}
+            size="md"
+            footer={
+              <>
+                <button
+                  onClick={() => setSelected(null)}
+                  disabled={saving}
+                  className={ui.btnSecondary}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleRecordPayment}
+                  disabled={saving || !paidOn}
+                  className={ui.btnSuccess}
+                >
+                  {saving ? 'Recording...' : 'Record Payment'}
+                </button>
+              </>
+            }
+          >
+            <div className="space-y-3">
+              <div className="rounded-xl border border-glass-line bg-surface/60 p-3">
+                <p className="text-[13px] font-semibold text-ink">{selected.reserver_name}</p>
+                <p className="text-[11.5px] text-ink-muted">{selected.reserver_id}</p>
+                <p className="mt-1 text-[12.5px] text-ink-soft">{selected.book_name}</p>
+                <div className="mt-2 grid grid-cols-3 gap-2 border-t border-glass-line pt-2">
+                  <div>
+                    <p className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-ink-muted">Due</p>
+                    <p className="text-[12px] font-semibold text-ink">{formatDate(selected.due_date)}</p>
                   </div>
-                  <h3 className="text-xl font-bold text-[#002147]">Record Payment</h3>
-                </div>
-
-                <div className="bg-gray-50 p-4 rounded-lg mb-4 border-2 border-gray-200">
-                  <p className="text-sm font-semibold text-[#002147]">{selected.reserver_name}</p>
-                  <p className="text-xs text-gray-500">{selected.reserver_id}</p>
-                  <p className="text-sm text-gray-600 mt-1">{selected.book_name}</p>
-                  <div className="grid grid-cols-3 gap-2 mt-2 pt-2 border-t border-gray-200">
-                    <div>
-                      <p className="text-[10px] font-bold text-gray-500 uppercase">Due</p>
-                      <p className="text-xs font-semibold text-[#002147]">{formatDate(selected.due_date)}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-bold text-gray-500 uppercase">Returned</p>
-                      <p className="text-xs font-semibold text-[#002147]">{formatDate(selected.return_date)}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-bold text-gray-500 uppercase">Days Late</p>
-                      <p className="text-xs font-semibold text-red-600">{fine.days}</p>
-                    </div>
+                  <div>
+                    <p className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-ink-muted">Returned</p>
+                    <p className="text-[12px] font-semibold text-ink">{formatDate(selected.return_date)}</p>
                   </div>
-                </div>
-
-                <div className="bg-green-50 border-2 border-green-300 rounded-lg p-3 mb-4">
-                  <p className="text-[10px] font-bold text-green-800 uppercase">Amount to collect</p>
-                  <p className="text-2xl font-bold text-green-800">
-                    {formatMoney(fine.amount, settings)}
-                  </p>
-                </div>
-
-                <div className="mb-4">
-                  <label className="block text-[10px] font-bold text-gray-600 uppercase mb-1">
-                    Payment Date *
-                  </label>
-                  <input
-                    type="date"
-                    value={paidOn}
-                    onChange={(e) => setPaidOn(e.target.value)}
-                    className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg bg-gray-50 text-gray-900 text-sm focus:ring-2 focus:ring-[#fe9800] focus:border-[#fe9800] outline-none"
-                  />
-                </div>
-
-                <div className="flex items-start gap-2 bg-yellow-50 border-2 border-yellow-300 rounded-lg p-2.5 mb-4">
-                  <AlertTriangle className="w-4 h-4 text-yellow-700 flex-shrink-0 mt-0.5" />
-                  <p className="text-[11px] text-yellow-800">
-                    This marks the fine as collected. It cannot be undone from the admin panel.
-                  </p>
-                </div>
-
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setSelected(null)}
-                    disabled={saving}
-                    className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium border-2 border-gray-400 disabled:opacity-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleRecordPayment}
-                    disabled={saving || !paidOn}
-                    className="flex-1 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-medium border-2 border-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {saving ? 'Recording...' : 'Record Payment'}
-                  </button>
+                  <div>
+                    <p className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-ink-muted">Days Late</p>
+                    <p className="text-[12px] font-semibold text-rose-600">{fine.days}</p>
+                  </div>
                 </div>
               </div>
+
+              <div className="rounded-xl bg-emerald-500/10 p-3 ring-1 ring-emerald-500/25">
+                <p className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-emerald-700">Amount to collect</p>
+                <p className="text-xl font-bold tabular-nums text-emerald-700">
+                  {formatMoney(fine.amount, settings)}
+                </p>
+              </div>
+
+              <div>
+                <label className={ui.label}>
+                  Payment Date *
+                </label>
+                <input
+                  type="date"
+                  value={paidOn}
+                  onChange={(e) => setPaidOn(e.target.value)}
+                  className={ui.input}
+                />
+              </div>
+
+              <div className="flex items-start gap-2 rounded-xl bg-amber-500/10 p-2.5 ring-1 ring-amber-500/25">
+                <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600" />
+                <p className="text-[11.5px] text-amber-800">
+                  This marks the fine as collected. It cannot be undone from the admin panel.
+                </p>
+              </div>
             </div>
-          </div>
+          </Modal>
         )
       })()}
     </div>
@@ -596,8 +567,8 @@ export default function FineRecordsPage() {
 function PaymentAction({ row, onPay }) {
   if (row.state === 'paid') {
     return (
-      <span className="inline-flex items-center gap-1 text-[10px] font-bold text-green-700">
-        <CheckCircle className="w-3.5 h-3.5" />
+      <span className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-emerald-700">
+        <CheckCircle className="size-3.5" />
         Paid
       </span>
     )
@@ -605,7 +576,7 @@ function PaymentAction({ row, onPay }) {
 
   if (row.state === 'accruing') {
     return (
-      <span className="text-[10px] text-gray-500 italic whitespace-nowrap" title="The fine is settled when the book comes back">
+      <span className="whitespace-nowrap text-[11.5px] italic text-ink-muted" title="The fine is settled when the book comes back">
         On return
       </span>
     )
@@ -614,10 +585,10 @@ function PaymentAction({ row, onPay }) {
   return (
     <button
       onClick={() => onPay(row)}
-      className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors text-[10px] font-bold border-2 border-green-700 whitespace-nowrap"
+      className="inline-flex h-8 items-center gap-1 whitespace-nowrap rounded-lg bg-emerald-600 px-2.5 text-[12px] font-semibold text-white shadow-[0_6px_16px_-8px_rgba(5,150,105,0.6)] transition hover:bg-emerald-700"
       title="Record this fine as collected"
     >
-      <Wallet className="w-3.5 h-3.5" />
+      <Wallet className="size-3.5" />
       Record Payment
     </button>
   )
@@ -625,12 +596,11 @@ function PaymentAction({ row, onPay }) {
 
 function EmptyState() {
   return (
-    <div className="flex flex-col items-center py-6">
-      <div className="w-12 h-14 bg-[#fe9800] rounded shadow-lg flex items-center justify-center mb-2 border-2 border-[#002147]">
-        <Wallet className="w-5 h-5 text-white" />
-      </div>
-      <p className="text-[#002147] text-sm font-serif font-medium text-center">No fine records found</p>
-      <p className="text-gray-600 text-xs mt-1 text-center">Try a different filter or search</p>
-    </div>
+    <GlassEmptyState
+      icon={Wallet}
+      title="No fine records found"
+      hint="Try a different filter or search"
+      className="py-6"
+    />
   )
 }
