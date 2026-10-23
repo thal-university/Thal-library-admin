@@ -3,11 +3,11 @@
 
 'use client'
 import { useEffect, useState } from 'react'
-import Header from '@/components/Header'
 import DashboardCards from '@/components/DashboardCards'
 import Loader from '@/components/Loader'
 import { supabase } from '@/lib/supabase'
-import { BookOpen, TrendingUp, Users, Calendar } from 'lucide-react'
+import { GlassCard, CardHeader, EmptyState, Pill } from '@/components/ui/glass'
+import { BookOpen, TrendingUp, Users, Calendar, Quote } from 'lucide-react'
 
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
@@ -67,136 +67,123 @@ export default function DashboardPage() {
     }
   }
 
-  if (loading) return <Loader />
+  if (loading) return <Loader inline />
+
+  const todayLabel = new Date().toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric'
+  })
 
   return (
-    <div className="h-screen overflow-hidden bg-white flex flex-col">
-      <Header title="Dashboard" />
-
-      <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto w-full">
-        {/* University Header Banner */}
-        
-
-        {/* === Stats Cards === */}
-        <DashboardCards stats={stats} />
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
-          {/* === Recent Books === */}
-          <div className="lg:col-span-2 bg-white rounded-xl p-3 sm:p-4 border-2 border-[#fe9800] shadow-xl">
-            <div className="flex items-center gap-2 mb-3 sm:mb-4 pb-2 border-b-2 border-[#fe9800]">
-              <div className="p-1.5 sm:p-2 rounded-lg bg-[#fe9800] flex-shrink-0">
-                <BookOpen className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-              </div>
-              <h2 className="text-xs sm:text-sm font-bold text-[#002147] tracking-tight font-serif">
-                Recently Added Books
-              </h2>
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="scroll-quiet min-h-0 flex-1 overflow-auto">
+        <div className="mx-auto w-full max-w-7xl space-y-3 pb-3">
+          {/* Greeting */}
+          <div className="rise flex flex-wrap items-end justify-between gap-3 px-1 pt-1">
+            <div className="min-w-0">
+              <p className="flex items-center gap-1.5 text-[12px] font-medium text-ink-muted">
+                <Calendar className="size-3.5" aria-hidden="true" />
+                {todayLabel}
+              </p>
+              <h1 className="mt-0.5 text-[20px] font-bold leading-tight tracking-tight text-heading sm:text-[22px]">
+                Welcome{' '}
+                <span className="bg-[linear-gradient(120deg,#f59a3c,#dd6b12)] bg-clip-text text-transparent">back</span>
+              </h1>
+              <p className="mt-0.5 text-[12.5px] text-ink-muted">Here&apos;s how the library collection looks today.</p>
             </div>
-
-            {recentBooks.length === 0 ? (
-              <div className="text-center py-8">
-                <BookOpen className="w-10 h-10 mx-auto text-[#002147] mb-2 opacity-50" />
-                <p className="text-gray-500 text-xs font-serif">No books added yet</p>
-              </div>
-            ) : (
-              <div className="space-y-2 overflow-y-auto max-h-[380px] pr-1 sm:pr-2 scrollbar-thin scrollbar-thumb-[#fe9800] scrollbar-track-transparent hover:scrollbar-thumb-[#002147]">
-                {recentBooks.map((book) => (
-                  <div
-                    key={book.id}
-                    className="flex items-start gap-2 p-2.5 sm:p-3 bg-gray-50 rounded-lg border-l-4 border-[#fe9800] hover:shadow-lg transition-all duration-300"
-                  >
-                    <div className="flex-shrink-0 mt-0.5 hidden sm:block">
-                      <div className="w-8 h-11 bg-[#002147] rounded shadow-md flex items-center justify-center">
-                        <BookOpen className="w-4 h-4 text-white" />
-                      </div>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-bold text-[#002147] text-[10px] sm:text-xs leading-tight mb-0.5 font-serif">
-                        {book.name}
-                      </h3>
-                      <p className="text-[10px] text-gray-600 mb-1">
-                        <span className="font-medium">by</span> {book.author}
-                      </p>
-                      <div className="flex items-center gap-1 text-[10px] text-gray-500 flex-wrap">
-                        <span className="bg-white px-1.5 py-0.5 rounded text-[10px] border border-gray-300">{book.department}</span>
-                      </div>
-                    </div>
-                    <span
-                      className={`flex-shrink-0 px-2 py-1 rounded-lg text-[10px] font-bold ${
-                        book.status === 'Available'
-                          ? 'bg-[#fe9800] text-white'
-                          : 'bg-[#002147] text-white'
-                      }`}
-                    >
-                      {book.status}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
 
-          {/* === Quick Stats Column === */}
-          <div className="space-y-3 sm:space-y-4">
-            {/* Activity Card */}
-            <div className="bg-[#fe9800] rounded-xl p-3 sm:p-4 text-white shadow-xl border-2 border-[#fe9800]">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="p-1.5 bg-white/20 rounded-lg flex-shrink-0">
-                  <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6" />
-                </div>
-                <div>
-                  <p className="text-[10px] font-medium text-white">Library Activity</p>
-                  <h3 className="text-sm sm:text-base font-bold tracking-tight font-serif">Active</h3>
-                </div>
-              </div>
-              <div className="bg-white/10 rounded-lg p-2">
-                <p className="text-[10px] leading-relaxed">
-                  System running smoothly with <strong className="text-xs font-bold">{stats.total}</strong> books in collection.
-                </p>
-              </div>
-            </div>
+          {/* === Stats Cards === */}
+          <DashboardCards stats={stats} />
 
-            {/* Library Stats */}
-            {/* <div className="bg-white rounded-xl p-3 sm:p-4 border-2 border-[#002147] shadow-xl">
-              <div className="flex items-center gap-1.5 mb-2.5 pb-2 border-b-2 border-[#fe9800]">
-                <div className="p-1.5 bg-[#002147] rounded-lg flex-shrink-0">
-                  <Users className="w-4 h-4 text-white" />
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+            {/* === Recent Books === */}
+            <GlassCard index={5} className="flex min-w-0 flex-col lg:col-span-2">
+              <CardHeader title="Recently Added Books" subtitle="The latest five additions to the catalogue">
+                <span className="grid size-8 place-items-center rounded-xl bg-brand-500/10 text-brand-600">
+                  <BookOpen className="size-4" aria-hidden="true" />
+                </span>
+              </CardHeader>
+
+              {recentBooks.length === 0 ? (
+                <EmptyState icon={BookOpen} title="No books added yet" hint="New books will show up here." />
+              ) : (
+                <div className="scroll-quiet max-h-[380px] space-y-1.5 overflow-y-auto px-3 pb-3">
+                  {recentBooks.map((book) => (
+                    <div
+                      key={book.id}
+                      className="flex items-center gap-3 rounded-xl border border-glass-line bg-surface/50 px-3 py-2 transition-colors hover:bg-surface/80"
+                    >
+                      <div className="hidden shrink-0 sm:block">
+                        <div className="grid h-10 w-8 place-items-center rounded-lg bg-[linear-gradient(135deg,#2b3a63,#16203b)] text-white shadow-[0_6px_14px_-8px_rgba(22,32,59,0.8)]">
+                          <BookOpen className="size-3.5" aria-hidden="true" />
+                        </div>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="truncate text-[13px] font-semibold leading-tight text-ink">
+                          {book.name}
+                        </h3>
+                        <p className="truncate text-[12px] text-ink-muted">
+                          <span className="font-medium">by</span> {book.author}
+                        </p>
+                        <div className="mt-1 flex flex-wrap items-center gap-1">
+                          <span className="rounded-md bg-surface/80 px-1.5 py-0.5 text-[11px] text-ink-soft ring-1 ring-edge">{book.department}</span>
+                        </div>
+                      </div>
+                      <Pill tone={book.status === 'Available' ? 'success' : 'warning'} className="shrink-0">
+                        {book.status}
+                      </Pill>
+                    </div>
+                  ))}
                 </div>
-                <h3 className="font-bold text-xs sm:text-sm text-[#002147] font-serif">
-                  Library Info
-                </h3>
-              </div>
-              <div className="space-y-2 text-xs">
-                <div className="flex justify-between items-center p-2 rounded bg-gray-50 border border-gray-200">
-                  <span className="text-gray-700 font-medium">Total Collection</span>
-                  <span className="font-bold text-[#002147]">{stats.total} Books</span>
-                </div>
-                <div className="flex justify-between items-center p-2 rounded bg-gray-50 border border-gray-200">
-                  <span className="text-gray-700 font-medium">Available</span>
-                  <span className="font-bold text-[#fe9800]">{stats.available} Books</span>
-                </div>
-                <div className="flex justify-between items-center p-2 rounded bg-gray-50 border border-gray-200">
-                  <span className="text-gray-700 font-medium">Allocated</span>
-                  <span className="font-bold text-[#002147]">{stats.allocated} Books</span>
-                </div>
-                <div className="flex justify-between items-center p-2 rounded bg-gray-50 border-t-2 border-[#fe9800] mt-2 pt-2">
-                  <span className="text-gray-700 font-medium">System Status</span>
-                  <span className="flex items-center gap-1.5 sm:gap-2 font-bold text-[#fe9800]">
-                    <span className="w-2 h-2 bg-[#fe9800] rounded-full animate-pulse"></span>
-                    Online
+              )}
+            </GlassCard>
+
+            {/* === Quick Stats Column === */}
+            <div className="flex min-w-0 flex-col gap-3">
+              {/* Activity Card */}
+              <GlassCard index={6} className="p-3.5">
+                <div className="flex items-center gap-3">
+                  <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[linear-gradient(135deg,#f9a24f,#dd6b12)] text-white shadow-[0_8px_18px_-8px_rgba(221,107,18,0.8)]">
+                    <TrendingUp className="size-[18px]" aria-hidden="true" />
                   </span>
+                  <div className="min-w-0">
+                    <p className="text-[11.5px] font-medium text-ink-muted">Library Activity</p>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-[15px] font-bold leading-tight text-heading">Active</h3>
+                      <Pill tone="success" pulse>Online</Pill>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div> */}
+                <p className="mt-2.5 rounded-xl bg-surface/60 px-3 py-2 text-[12px] leading-relaxed text-ink-soft ring-1 ring-glass-line">
+                  System running smoothly with <strong className="font-semibold text-ink">{stats.total}</strong> books in collection.
+                </p>
+              </GlassCard>
 
-            {/* Academic Quote - Compact */}
-            <div className="bg-[#002147] rounded-xl p-3 text-white shadow-xl border-2 border-[#fe9800]">
-              <div className="text-2xl text-[#fe9800] opacity-75 font-serif leading-none mb-1">"</div>
-              <p className="text-[10px] italic leading-relaxed mb-1.5 font-serif">
-                Education is the most powerful weapon which you can use to change the world.
-              </p>
-              <p className="text-[10px] text-[#fe9800] font-medium">
-                - Nelson Mandela
-              </p>
+              {/* Library Stats */}
+              {/* <div className="bg-white rounded-xl p-3 sm:p-4 border-2 border-[#002147] shadow-xl">
+                <div className="flex items-center gap-1.5 mb-2.5 pb-2 border-b-2 border-[#fe9800]">
+                  <div className="p-1.5 bg-[#002147] rounded-lg flex-shrink-0">
+                    <Users className="w-4 h-4 text-white" />
+                  </div>
+                  <h3 className="font-bold text-xs sm:text-sm text-[#002147] font-serif">
+                    Library Info
+                  </h3>
+                </div>
+              </div> */}
+
+              {/* Academic Quote - Compact */}
+              <GlassCard index={7} className="p-3.5">
+                <Quote className="size-4 text-brand-500" aria-hidden="true" />
+                <p className="mt-1.5 text-[12.5px] italic leading-relaxed text-ink-soft">
+                  Education is the most powerful weapon which you can use to change the world.
+                </p>
+                <p className="mt-1.5 text-[11.5px] font-semibold text-brand-600">
+                  - Nelson Mandela
+                </p>
+              </GlassCard>
             </div>
           </div>
         </div>

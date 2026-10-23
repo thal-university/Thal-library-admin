@@ -1,6 +1,5 @@
 'use client'
 import { useState } from 'react'
-import Header from '@/components/Header'
 import {
   Search,
   X,
@@ -13,8 +12,10 @@ import {
   Download,
   Users
 } from 'lucide-react'
-import toast, { Toaster } from 'react-hot-toast'
+import toast from 'react-hot-toast'
 import * as XLSX from 'xlsx'
+import { GlassCard, CardHeader, EmptyState, StatCard, Pill, ui } from '@/components/ui/glass'
+import { cn } from '@/lib/utils'
 import {
   getLibrarySettings,
   searchPeople,
@@ -172,53 +173,52 @@ export default function RecordsPage() {
     toast.success('Record exported')
   }
 
-  const statusStyles = {
-    pending: 'bg-yellow-100 text-yellow-700 border-yellow-300',
-    confirmed: 'bg-blue-100 text-blue-700 border-blue-300',
-    returned: 'bg-green-100 text-green-700 border-green-300',
-    completed: 'bg-green-100 text-green-700 border-green-300',
-    deleted: 'bg-gray-100 text-gray-700 border-gray-300'
+  const statusTones = {
+    pending: 'warning',
+    confirmed: 'info',
+    returned: 'success',
+    completed: 'success',
+    deleted: 'neutral'
   }
 
   return (
-    <div className="h-screen overflow-hidden bg-white flex flex-col">
-      <Toaster position="top-right" />
-      <Header title="Overall Record" />
-
-      <div className="flex-1 overflow-y-auto p-2 sm:p-3 space-y-2">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="scroll-quiet flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
         {/* Search Panel */}
-        <div className="bg-white rounded-xl p-3 border-2 border-[#fe9800] shadow-lg">
-          <div className="flex flex-col gap-3">
+        <GlassCard index={0} className="shrink-0 p-3">
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
             {/* Mode toggle */}
-            <div className="grid grid-cols-2 gap-2 sm:flex sm:w-fit">
+            <div className="grid shrink-0 grid-cols-2 gap-1 rounded-xl border border-edge/80 bg-surface/50 p-1 sm:flex sm:w-fit">
               <button
                 onClick={() => switchMode('student')}
-                className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-bold text-sm border-2 transition-all ${
+                className={cn(
+                  'flex h-7 items-center justify-center gap-1.5 rounded-lg px-3 text-[12.5px] font-semibold transition',
                   mode === 'student'
-                    ? 'bg-[#fe9800] text-white border-[#002147] shadow-md'
-                    : 'bg-white text-[#002147] border-[#002147] hover:bg-gray-50'
-                }`}
+                    ? 'bg-brand-500 text-white shadow-[0_6px_14px_-6px_rgba(238,122,26,0.7)]'
+                    : 'text-ink-soft hover:bg-surface hover:text-ink'
+                )}
               >
-                <GraduationCap className="w-4 h-4" />
+                <GraduationCap className="size-4" />
                 Student (Roll No)
               </button>
               <button
                 onClick={() => switchMode('teacher')}
-                className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-bold text-sm border-2 transition-all ${
+                className={cn(
+                  'flex h-7 items-center justify-center gap-1.5 rounded-lg px-3 text-[12.5px] font-semibold transition',
                   mode === 'teacher'
-                    ? 'bg-[#fe9800] text-white border-[#002147] shadow-md'
-                    : 'bg-white text-[#002147] border-[#002147] hover:bg-gray-50'
-                }`}
+                    ? 'bg-brand-500 text-white shadow-[0_6px_14px_-6px_rgba(238,122,26,0.7)]'
+                    : 'text-ink-soft hover:bg-surface hover:text-ink'
+                )}
               >
-                <User className="w-4 h-4" />
+                <User className="size-4" />
                 Teacher (Name)
               </button>
             </div>
 
             {/* Search field */}
-            <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-2">
+            <form onSubmit={handleSearch} className="flex flex-1 flex-col gap-2 sm:flex-row">
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-[#fe9800]" />
+                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-muted" />
                 <input
                   type="text"
                   value={query}
@@ -228,97 +228,89 @@ export default function RecordsPage() {
                       ? 'Enter roll number, e.g. 2021-CS-045'
                       : 'Enter teacher name, e.g. Ahmed Raza'
                   }
-                  className="w-full pl-9 pr-9 py-2.5 border-2 border-gray-200 rounded-lg bg-gray-50 text-gray-800 placeholder-gray-500 focus:ring-2 focus:ring-[#fe9800] focus:border-[#fe9800] outline-none transition-all font-medium text-sm"
+                  className={cn(ui.input, 'pl-9 pr-9')}
                 />
                 {query && (
                   <button
                     type="button"
                     onClick={() => { setQuery(''); setHasSearched(false); resetResults() }}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[#fe9800] hover:text-[#002147]"
+                    className="absolute right-2 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded-md text-ink-muted transition hover:bg-surface hover:text-ink"
                   >
-                    <X className="w-4 h-4" />
+                    <X className="size-3.5" />
                   </button>
                 )}
               </div>
-              <button
-                type="submit"
-                disabled={searching}
-                className="flex items-center justify-center gap-2 px-6 py-2.5 bg-[#002147] text-white rounded-lg font-bold text-sm border-2 border-[#fe9800] hover:shadow-lg transition-all disabled:opacity-50"
-              >
+              <button type="submit" disabled={searching} className={ui.btnPrimary}>
                 {searching ? (
-                  <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>
+                  <span className="size-4 animate-spin rounded-full border-2 border-white/40 border-t-white"></span>
                 ) : (
-                  <Search className="w-4 h-4" />
+                  <Search className="size-4" />
                 )}
                 Search
               </button>
             </form>
           </div>
-        </div>
+        </GlassCard>
 
         {/* Multiple matches - pick one */}
         {matches.length > 0 && (
-          <div className="bg-white rounded-xl border-2 border-[#fe9800] shadow-xl overflow-hidden">
-            <div className="bg-[#002147] px-3 py-1.5 border-b-2 border-[#fe9800]">
-              <h3 className="text-sm font-bold text-white font-serif flex items-center gap-1.5">
-                <Users className="w-4 h-4" />
-                {matches.length} matches - select one
-              </h3>
-            </div>
-            <div className="divide-y divide-gray-200 max-h-72 overflow-y-auto">
+          <GlassCard index={1} className="shrink-0 overflow-hidden">
+            <CardHeader title={`${matches.length} matches - select one`} />
+            <div className="scroll-quiet max-h-72 divide-y divide-glass-line overflow-y-auto border-t border-glass-line">
               {matches.map(m => (
                 <button
                   key={`${m.kind}-${m.id || m.key}`}
                   onClick={() => loadRecord(m)}
-                  className="w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors"
+                  className="flex w-full items-center gap-2.5 px-4 py-2 text-left transition-colors hover:bg-surface/60"
                 >
-                  <p className="text-sm font-bold text-[#002147]">{m.name}</p>
-                  <p className="text-xs text-gray-600">
-                    {m.identifier}{m.department ? ` - ${m.department}` : ''}
-                    {m.directoryOnly ? ' - not registered yet' : ''}
-                  </p>
+                  <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-brand-500/10 text-brand-600">
+                    <Users className="size-3.5" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-[13px] font-semibold text-ink">{m.name}</span>
+                    <span className="block truncate text-[11.5px] text-ink-muted">
+                      {m.identifier}{m.department ? ` - ${m.department}` : ''}
+                      {m.directoryOnly ? ' - not registered yet' : ''}
+                    </span>
+                  </span>
                 </button>
               ))}
             </div>
-          </div>
+          </GlassCard>
         )}
 
         {/* Empty state */}
         {!person && matches.length === 0 && (
-          <div className="bg-white rounded-xl border-2 border-gray-200 shadow-sm p-10 text-center">
-            <div className="w-14 h-16 bg-[#fe9800] rounded shadow-lg flex items-center justify-center mb-3 border-2 border-[#002147] mx-auto">
-              <BookMarked className="w-6 h-6 text-white" />
-            </div>
-            <p className="text-[#002147] font-serif font-semibold">
-              {hasSearched && !searching ? 'No record found' : 'Search a complete borrowing record'}
-            </p>
-            <p className="text-sm text-gray-600 mt-1">
-              {mode === 'student'
+          <GlassCard index={1} className="flex min-h-[220px] flex-1 flex-col">
+            <EmptyState
+              icon={BookMarked}
+              title={hasSearched && !searching ? 'No record found' : 'Search a complete borrowing record'}
+              hint={mode === 'student'
                 ? 'Look up a student by their roll number.'
                 : 'Look up a teacher by their name.'}
-            </p>
-          </div>
+            />
+          </GlassCard>
         )}
 
         {/* The record */}
         {person && (
           <>
             {/* Profile card */}
-            <div className="bg-white rounded-xl border-2 border-[#fe9800] shadow-xl overflow-hidden">
-              <div className="bg-[#002147] px-3 py-1.5 border-b-2 border-[#fe9800] flex items-center justify-between gap-2">
-                <h3 className="text-sm font-bold text-white font-serif flex items-center gap-1.5">
-                  {person.kind === 'teacher' ? <User className="w-4 h-4" /> : <GraduationCap className="w-4 h-4" />}
-                  {person.kind === 'teacher' ? 'Teacher' : 'Student'} Profile
-                </h3>
-                <button
-                  onClick={exportRecord}
-                  className="flex items-center gap-1.5 px-3 py-1 bg-[#fe9800] text-white rounded text-xs font-bold border border-white/30 hover:shadow-lg transition-all"
-                >
-                  <Download className="w-3.5 h-3.5" />
+            <GlassCard index={1} className="shrink-0">
+              <CardHeader
+                title={
+                  <span className="flex items-center gap-1.5">
+                    {person.kind === 'teacher' ? <User className="size-4 text-brand-600" /> : <GraduationCap className="size-4 text-brand-600" />}
+                    {person.kind === 'teacher' ? 'Teacher' : 'Student'} Profile
+                  </span>
+                }
+              >
+                <button onClick={exportRecord} className={cn(ui.btnSecondary, 'h-8 px-3 text-[12px]')}>
+                  <Download className="size-3.5" />
                   Export
                 </button>
-              </div>
-              <div className="p-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              </CardHeader>
+              <div className="grid grid-cols-2 gap-2 px-3.5 pb-3.5 sm:grid-cols-3 lg:grid-cols-6">
                 <Field label="Name" value={person.name} />
                 <Field label={person.kind === 'teacher' ? 'Official Email' : 'Roll Number'} value={person.identifier} />
                 <Field label="Department" value={person.department} />
@@ -326,64 +318,66 @@ export default function RecordsPage() {
                 <Field label="Father Name" value={person.father_name} />
                 <Field label="CNIC" value={person.cnic} />
               </div>
-            </div>
+            </GlassCard>
 
             {/* Summary */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-              <SummaryCard icon={BookMarked} label="Total" value={summary.total} color="#fe9800" />
-              <SummaryCard icon={BookMarked} label="Issued" value={summary.issued} color="#002147" />
-              <SummaryCard icon={BookMarked} label="Pending" value={summary.pending} color="#ca8a04" />
-              <SummaryCard icon={CheckCircle} label="Returned" value={summary.returned} color="#16a34a" />
-              <SummaryCard icon={AlertTriangle} label="Overdue" value={summary.overdue} color="#dc2626" />
-              <SummaryCard
+            <div className="grid shrink-0 grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+              <StatCard index={2} icon={BookMarked} label="Total" value={summary.total} tone="brand" />
+              <StatCard index={3} icon={BookMarked} label="Issued" value={summary.issued} tone="info" />
+              <StatCard index={4} icon={BookMarked} label="Pending" value={summary.pending} tone="navy" />
+              <StatCard index={5} icon={CheckCircle} label="Returned" value={summary.returned} tone="success" />
+              <StatCard index={6} icon={AlertTriangle} label="Overdue" value={summary.overdue} tone="danger" />
+              <StatCard
+                index={7}
                 icon={Coins}
                 label="Fines Due"
                 value={formatMoney(summary.finesUnpaid, settings)}
-                color="#dc2626"
-                small
+                tone="danger"
               />
             </div>
 
             {/* History table */}
-            <div className="bg-white rounded-xl border-2 border-[#fe9800] overflow-hidden shadow-xl">
-              <div className="bg-[#002147] px-3 py-1.5 border-b-2 border-[#fe9800]">
-                <h3 className="text-sm font-bold text-white font-serif flex items-center gap-1.5">
-                  <BookMarked className="w-4 h-4" />
-                  Complete Borrowing History
-                </h3>
-              </div>
+            <GlassCard index={8} className="flex min-h-[320px] flex-1 flex-col overflow-hidden">
+              <CardHeader
+                title={
+                  <span className="flex items-center gap-1.5">
+                    <BookMarked className="size-4 text-brand-600" />
+                    Complete Borrowing History
+                  </span>
+                }
+              />
 
               {/* Mobile cards */}
-              <div className="md:hidden p-2 space-y-1.5">
+              <div className="scroll-quiet min-h-0 flex-1 space-y-1.5 overflow-auto px-3 pb-3 md:hidden">
                 {history.length === 0 ? (
-                  <p className="text-center text-sm text-gray-500 py-6">No borrowing history</p>
+                  <p className="py-6 text-center text-[12.5px] text-ink-muted">No borrowing history</p>
                 ) : (
                   history.map(r => {
                     const fine = fineFor(r)
                     return (
-                      <div key={r.id} className="bg-gray-50 rounded-lg px-2.5 py-2 border border-gray-200">
-                        <div className="flex items-center gap-1.5 mb-0.5">
-                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${statusStyles[r.status] || statusStyles.deleted}`}>
+                      <div key={r.id} className="rounded-xl border border-glass-line bg-surface/50 px-3 py-2">
+                        <div className="mb-1 flex items-center gap-1.5">
+                          <Pill tone={statusTones[r.status] || 'neutral'}>
                             {r.status.charAt(0).toUpperCase() + r.status.slice(1)}
-                          </span>
-                          <span className="text-[10px] text-gray-500 ml-auto">SR: {r.book_sr_no || 'N/A'}</span>
+                          </Pill>
+                          <span className="ml-auto font-mono text-[11px] text-ink-muted">SR: {r.book_sr_no || 'N/A'}</span>
                         </div>
-                        <p className="text-sm font-bold text-[#002147] truncate">{r.book_name}</p>
-                        {r.book?.author && <p className="text-[11px] text-gray-500 truncate">{r.book.author}</p>}
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-1">
-                          <span className="text-[10px] text-gray-600">
-                            <span className="font-semibold text-[#002147]">Issued:</span> {formatDate(r.issue_date)}
+                        <p className="truncate text-[13px] font-semibold text-ink">{r.book_name}</p>
+                        {r.book?.author && <p className="truncate text-[11.5px] text-ink-muted">{r.book.author}</p>}
+                        <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] text-ink-muted">
+                          <span>
+                            <span className="font-semibold text-ink-soft">Issued:</span> {formatDate(r.issue_date)}
                           </span>
-                          <span className="text-[10px] text-gray-600">
-                            <span className="font-semibold text-[#002147]">Due:</span> {formatDate(r.due_date)}
+                          <span>
+                            <span className="font-semibold text-ink-soft">Due:</span> {formatDate(r.due_date)}
                           </span>
-                          <span className="text-[10px] text-gray-600">
-                            <span className="font-semibold text-[#002147]">Returned:</span> {formatDate(r.return_date)}
+                          <span>
+                            <span className="font-semibold text-ink-soft">Returned:</span> {formatDate(r.return_date)}
                           </span>
                           {fine.amount > 0 && (
-                            <span className="text-[10px] font-bold text-red-700 bg-red-50 px-1.5 py-0.5 rounded border border-red-200">
+                            <Pill tone="danger">
                               Fine {formatMoney(fine.amount, settings)} ({fine.days}d)
-                            </span>
+                            </Pill>
                           )}
                         </div>
                       </div>
@@ -393,27 +387,29 @@ export default function RecordsPage() {
               </div>
 
               {/* Desktop table */}
-              <div className="hidden md:block overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-50 border-b-2 border-[#fe9800]">
+              <div className="scroll-quiet hidden min-h-0 flex-1 overflow-auto border-t border-glass-line md:block">
+                <table className={ui.table}>
+                  <thead className={ui.thead}>
                     <tr>
-                      <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Book SR No</th>
-                      <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Book Details</th>
-                      <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Department</th>
-                      <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Status</th>
-                      <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Issue Date</th>
-                      <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Due Date</th>
-                      <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Return Date</th>
-                      <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">Fine</th>
+                      <th className={ui.th}>Book SR No</th>
+                      <th className={ui.th}>Book Details</th>
+                      <th className={ui.th}>Department</th>
+                      <th className={ui.th}>Status</th>
+                      <th className={ui.th}>Issue Date</th>
+                      <th className={ui.th}>Due Date</th>
+                      <th className={ui.th}>Return Date</th>
+                      <th className={ui.th}>Fine</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200">
+                  <tbody>
                     {history.length === 0 ? (
                       <tr>
-                        <td colSpan="8" className="px-4 py-12 text-center text-gray-500">
-                          <BookMarked className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-                          <p className="font-medium">No borrowing history</p>
-                          <p className="text-sm">{person.name} has not reserved any book yet</p>
+                        <td colSpan="8">
+                          <EmptyState
+                            icon={BookMarked}
+                            title="No borrowing history"
+                            hint={`${person.name} has not reserved any book yet`}
+                          />
                         </td>
                       </tr>
                     ) : (
@@ -421,50 +417,46 @@ export default function RecordsPage() {
                         const fine = fineFor(r)
                         const isLate = fine.days > 0
                         return (
-                          <tr key={r.id} className={`hover:bg-gray-50 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
-                            <td className="px-3 py-2">
-                              <span className="font-mono text-xs text-[#002147] font-semibold">{r.book_sr_no || 'N/A'}</span>
+                          <tr key={r.id} className={ui.tr}>
+                            <td className={cn(ui.td, 'py-2')}>
+                              <span className="font-mono text-[12px] font-semibold text-ink">{r.book_sr_no || 'N/A'}</span>
                             </td>
-                            <td className="px-3 py-2 max-w-[220px]">
-                              <span className="font-semibold text-xs text-[#002147] truncate block" title={r.book_name}>
+                            <td className={cn(ui.td, 'max-w-[240px] py-2')}>
+                              <span className="block truncate text-[13px] font-semibold text-ink" title={r.book_name}>
                                 {r.book_name}
                               </span>
                               {r.book?.author && (
-                                <span className="text-[10px] text-gray-500 truncate block" title={r.book.author}>
+                                <span className="block truncate text-[11.5px] text-ink-muted" title={r.book.author}>
                                   {r.book.author}
                                 </span>
                               )}
                             </td>
-                            <td className="px-3 py-2 max-w-[120px]">
-                              <span className="text-[10px] text-gray-600 truncate block">{r.book?.department || '-'}</span>
+                            <td className={cn(ui.td, 'max-w-[140px] py-2')}>
+                              <span className="block truncate text-[12px]">{r.book?.department || '-'}</span>
                             </td>
-                            <td className="px-3 py-2">
-                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold border ${statusStyles[r.status] || statusStyles.deleted}`}>
+                            <td className={cn(ui.td, 'py-2')}>
+                              <Pill tone={statusTones[r.status] || 'neutral'}>
                                 {r.status.charAt(0).toUpperCase() + r.status.slice(1)}
-                              </span>
+                              </Pill>
                             </td>
-                            <td className="px-3 py-2">
-                              <span className="text-[10px] text-gray-600 whitespace-nowrap">{formatDate(r.issue_date)}</span>
+                            <td className={cn(ui.td, 'py-2')}>
+                              <span className="whitespace-nowrap text-[12px]">{formatDate(r.issue_date)}</span>
                             </td>
-                            <td className="px-3 py-2">
-                              <span className={`text-[10px] whitespace-nowrap ${isLate ? 'text-red-600 font-semibold' : 'text-gray-600'}`}>
+                            <td className={cn(ui.td, 'py-2')}>
+                              <span className={cn('whitespace-nowrap text-[12px]', isLate && 'font-semibold text-rose-600')}>
                                 {formatDate(r.due_date)}
                               </span>
                             </td>
-                            <td className="px-3 py-2">
-                              <span className="text-[10px] text-gray-600 whitespace-nowrap">{formatDate(r.return_date)}</span>
+                            <td className={cn(ui.td, 'py-2')}>
+                              <span className="whitespace-nowrap text-[12px]">{formatDate(r.return_date)}</span>
                             </td>
-                            <td className="px-3 py-2">
+                            <td className={cn(ui.td, 'py-2')}>
                               {fine.amount > 0 ? (
-                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border whitespace-nowrap ${
-                                  r.fine_paid
-                                    ? 'text-green-700 bg-green-50 border-green-200'
-                                    : 'text-red-700 bg-red-50 border-red-200'
-                                }`}>
+                                <Pill tone={r.fine_paid ? 'success' : 'danger'}>
                                   {formatMoney(fine.amount, settings)}{r.fine_paid ? ' paid' : ''}
-                                </span>
+                                </Pill>
                               ) : (
-                                <span className="text-[10px] text-gray-400">-</span>
+                                <span className="text-[12px] text-ink-muted/70">-</span>
                               )}
                             </td>
                           </tr>
@@ -475,16 +467,16 @@ export default function RecordsPage() {
                 </table>
               </div>
 
-              <div className="px-2 md:px-4 py-2 md:py-3 bg-gray-50 border-t-2 border-[#002147] flex flex-wrap items-center justify-between gap-2">
-                <p className="text-[10px] md:text-sm text-gray-600">
-                  <span className="font-semibold text-[#002147]">{history.length}</span> reservation(s) on record
+              <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-glass-line px-4 py-2 text-[12px] text-ink-muted">
+                <p>
+                  <span className="font-semibold text-ink">{history.length}</span> reservation(s) on record
                 </p>
-                <p className="text-[10px] md:text-sm text-gray-600">
+                <p>
                   Total fines charged:{' '}
-                  <span className="font-semibold text-red-700">{formatMoney(summary.finesTotal, settings)}</span>
+                  <span className="font-semibold text-rose-600">{formatMoney(summary.finesTotal, settings)}</span>
                 </p>
               </div>
-            </div>
+            </GlassCard>
           </>
         )}
       </div>
@@ -494,25 +486,9 @@ export default function RecordsPage() {
 
 function Field({ label, value }) {
   return (
-    <div className="bg-gray-50 rounded-lg p-2.5 border-2 border-[#002147]">
-      <p className="text-[10px] font-bold text-[#002147] uppercase tracking-wide mb-0.5">{label}</p>
-      <p className="text-xs font-medium text-gray-900 break-words">{value || 'N/A'}</p>
-    </div>
-  )
-}
-
-function SummaryCard({ icon: Icon, label, value, color, small }) {
-  return (
-    <div className="bg-white rounded-lg p-2 sm:p-3 border-2 shadow-md" style={{ borderColor: color }}>
-      <div className="flex items-center justify-between gap-1">
-        <div className="p-1.5 rounded-lg" style={{ backgroundColor: color }}>
-          <Icon className="w-4 h-4 text-white" />
-        </div>
-        <div className={`font-bold ${small ? 'text-sm sm:text-base' : 'text-lg sm:text-2xl'}`} style={{ color }}>
-          {value}
-        </div>
-      </div>
-      <p className="text-[10px] sm:text-xs font-bold text-[#002147] mt-1 uppercase">{label}</p>
+    <div className="rounded-xl border border-glass-line bg-surface/50 px-2.5 py-2">
+      <p className="mb-0.5 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-ink-muted">{label}</p>
+      <p className="break-words text-[12.5px] font-medium text-ink">{value || 'N/A'}</p>
     </div>
   )
 }

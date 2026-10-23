@@ -2,11 +2,15 @@
 
 'use client'
 import { useEffect, useState } from 'react'
-import Header from '@/components/Header'
+import { GlassCard, EmptyState, Pill, Modal, StatCard, ui } from '@/components/ui/glass'
+import Select from '@/components/ui/Select'
+import { cn } from '@/lib/utils'
 import Loader from '@/components/Loader'
 import { supabase } from '@/lib/supabase'
-import { Plus, Pencil, Trash2, BookOpen, Search, X, AlertTriangle, Upload, FileSpreadsheet, XCircle, Filter, SlidersHorizontal } from 'lucide-react'
-import toast, { Toaster } from 'react-hot-toast'
+import { Plus, Pencil, Trash2, BookOpen, Search, X, AlertTriangle, Upload, FileSpreadsheet, XCircle, Filter, SlidersHorizontal, Library, BookCheck, BookX, Building2 } from 'lucide-react'
+
+const PER_PAGE_OPTIONS = [[10, '10'], [50, '50'], [100, '100']]
+import toast from 'react-hot-toast'
 import * as XLSX from 'xlsx'
 import {
   getLibrarySettings,
@@ -511,1204 +515,1070 @@ export default function BooksPage() {
     setCurrentPage(1)
   }, [filterStatus, filterDepartment, searchQuery, itemsPerPage])
 
-  if (loading) return <Loader />
+  if (loading) return <Loader inline />
+
+  // Labels are trimmed: some department names are stored with stray whitespace
+  const deptOptions = departments.map((dept) => [dept.department_name, dept.department_name.trim()])
+  const availableCount = books.filter(b => b.status === 'Available').length
+  const allocatedCount = books.filter(b => b.status === 'Allocated').length
+  const departmentCount = new Set(books.map(b => (b.department || '').trim().toLowerCase()).filter(Boolean)).size
+
+  const segBtn = (active) =>
+    cn(
+      'inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-[12px] font-semibold outline-none transition focus-visible:ring-2 focus-visible:ring-brand-500/40',
+      active
+        ? 'bg-[linear-gradient(135deg,#f9a24f,#dd6b12)] text-white shadow-[0_6px_14px_-6px_rgba(221,107,18,0.7)]'
+        : 'text-ink-soft hover:bg-surface/80 hover:text-ink'
+    )
+
+  const pagerBtn = 'inline-flex h-8 items-center justify-center rounded-lg border border-edge/90 bg-surface/70 px-2.5 text-[12px] font-semibold text-ink-soft transition hover:bg-surface hover:text-ink disabled:cursor-not-allowed disabled:opacity-40'
 
   return (
-    <div className="h-screen overflow-hidden bg-white flex flex-col">
-      <Toaster position="top-right" />
-      <Header title="Books Management" />
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      {/* KPIs */}
+      <div className="grid shrink-0 grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatCard index={0} icon={Library} label="Total Books" value={books.length.toLocaleString()} hint="Across the whole catalogue" tone="brand" />
+        <StatCard index={1} icon={BookCheck} label="Available" value={availableCount.toLocaleString()} hint="On the shelf now" tone="success" />
+        <StatCard index={2} icon={BookX} label="Allocated" value={allocatedCount.toLocaleString()} hint="Issued to readers" tone="navy" />
+        <StatCard index={3} icon={Building2} label="Departments" value={departmentCount} hint="With books in stock" tone="info" />
+      </div>
 
-      <div className="flex-1 overflow-y-auto p-2 sm:p-3 space-y-2">
-        {/* University Books Header - Compact */}
+      {/* Search and Actions Bar */}
+      <GlassCard index={4} className="p-3">
+        <div className="flex flex-col gap-2.5">
+          {/* Top Row: Search + Icon Buttons (Mobile) / Full Layout (Desktop) */}
+          <div className="flex items-center gap-2">
+            <div className="hidden min-w-0 shrink-0 lg:block lg:pr-2">
+              <h1 className="flex items-center gap-1.5 text-[15px] font-bold leading-tight text-heading">
+                <BookOpen className="size-4 text-brand-500" />
+                Book Collection
+              </h1>
+              <p className="text-[11.5px] text-ink-muted">Catalogue, allocate and import books</p>
+            </div>
 
+            {/* Search Bar */}
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-muted" />
+              <input
+                type="text"
+                placeholder="Search books..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className={cn(ui.input, 'pl-9 pr-9')}
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded-md text-ink-muted transition hover:bg-surface hover:text-ink"
+                >
+                  <X className="size-3.5" />
+                </button>
+              )}
+            </div>
 
-        {/* Search and Actions Bar */}
-        <div className="bg-white rounded-xl p-2 sm:p-3 border-2 border-[#fe9800] shadow-lg">
-          <div className="flex flex-col gap-2">
-            {/* Top Row: Search + Icon Buttons (Mobile) / Full Layout (Desktop) */}
-            <div className="flex items-center gap-2">
-              {/* Search Bar */}
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-[#fe9800]" />
-                <input
-                  type="text"
-                  placeholder="Search books..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-9 py-2 border-2 border-gray-200 rounded-lg bg-gray-50 text-gray-800 placeholder-gray-500 focus:ring-2 focus:ring-[#fe9800] focus:border-[#fe9800] outline-none transition-all font-medium text-sm"
-                />
-                {searchQuery && (
-                  <button
-                    onClick={() => setSearchQuery('')}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[#fe9800] hover:text-[#002147]"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
+            {/* Mobile: Icon Buttons */}
+            <div className="flex items-center gap-1.5 md:hidden">
+              {/* Filter Toggle */}
+              <button
+                onClick={() => setShowFilters(!showFilters)}
+                className={cn(
+                  'grid size-9 place-items-center rounded-xl border transition',
+                  showFilters || filterStatus !== 'all' || filterDepartment !== 'all'
+                    ? 'border-brand-400 bg-brand-500/10 text-brand-600'
+                    : 'border-edge/90 bg-surface/70 text-ink-soft'
                 )}
-              </div>
+                title="Filters"
+              >
+                <Filter className="size-4" />
+              </button>
 
-              {/* Mobile: Icon Buttons */}
-              <div className="flex items-center gap-1.5 md:hidden">
-                {/* Filter Toggle */}
-                <button
-                  onClick={() => setShowFilters(!showFilters)}
-                  className={`p-2 rounded-lg border-2 transition-all ${
-                    showFilters || filterStatus !== 'all' || filterDepartment !== 'all'
-                      ? 'bg-[#fe9800] text-white border-[#002147]'
-                      : 'bg-white text-[#002147] border-[#002147]'
-                  }`}
-                  title="Filters"
-                >
-                  <Filter className="w-5 h-5" />
-                </button>
+              {/* Actions Toggle */}
+              <button
+                onClick={() => setShowActions(!showActions)}
+                className={cn(
+                  'grid size-9 place-items-center rounded-xl border transition',
+                  showActions
+                    ? 'border-brand-400 bg-brand-500/10 text-brand-600'
+                    : 'border-edge/90 bg-surface/70 text-ink-soft'
+                )}
+                title="Actions"
+              >
+                <SlidersHorizontal className="size-4" />
+              </button>
 
-                {/* Actions Toggle */}
-                <button
-                  onClick={() => setShowActions(!showActions)}
-                  className={`p-2 rounded-lg border-2 transition-all ${
-                    showActions
-                      ? 'bg-[#002147] text-white border-[#fe9800]'
-                      : 'bg-white text-[#002147] border-[#002147]'
-                  }`}
-                  title="Actions"
-                >
-                  <SlidersHorizontal className="w-5 h-5" />
-                </button>
-
-                {/* Add Button - Always Visible */}
-                <button
-                  onClick={() => {
-                    setEditingBook(null)
-                    setFormData({ name: '', author: '', department: '', edition: '', status: 'Available' })
-                    setShowModal(true)
-                  }}
-                  className="p-2 bg-[#fe9800] text-white rounded-lg border-2 border-[#002147]"
-                  title="Add New Book"
-                >
-                  <Plus className="w-5 h-5" />
-                </button>
-              </div>
-
-              {/* Desktop: Full Buttons */}
-              <div className="hidden md:flex items-center gap-2">
-                <button
-                  onClick={() => setShowBulkImportModal(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-[#002147] text-white rounded-lg hover:shadow-xl hover:scale-105 transition-all font-bold text-sm border-2 border-[#fe9800]"
-                >
-                  <Upload className="w-4 h-4" />
-                  Bulk Import
-                </button>
-                <button
-                  onClick={() => setShowBulkDeleteModal(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:shadow-xl hover:scale-105 transition-all font-bold text-sm border-2 border-[#fe9800]"
-                  title="Delete all books for a selected department"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  Bulk Delete
-                </button>
-                <button
-                  onClick={() => {
-                    setEditingBook(null)
-                    setFormData({ name: '', author: '', department: '', edition: '', status: 'Available' })
-                    setShowModal(true)
-                  }}
-                  className="flex items-center gap-2 px-4 py-2 bg-[#fe9800] text-white rounded-lg hover:shadow-xl hover:scale-105 transition-all font-bold text-sm border-2 border-[#002147]"
-                >
-                  <Plus className="w-4 h-4" />
-                  Add New Book
-                </button>
-              </div>
+              {/* Add Button - Always Visible */}
+              <button
+                onClick={() => {
+                  setEditingBook(null)
+                  setFormData({ name: '', author: '', department: '', edition: '', sr_no: '', status: 'Available' })
+                  setShowModal(true)
+                }}
+                className={cn(ui.btnPrimary, 'w-9 px-0')}
+                title="Add New Book"
+              >
+                <Plus className="size-4" />
+              </button>
             </div>
 
-            {/* Desktop: Always show filters inline */}
-            <div className="hidden md:flex flex-wrap items-center gap-2">
+            {/* Desktop: Full Buttons */}
+            <div className="hidden items-center gap-2 md:flex">
               <button
-                onClick={() => setFilterStatus('all')}
-                className={`px-4 py-1.5 rounded-lg font-bold transition-all shadow-md text-sm border-2 ${
-                  filterStatus === 'all'
-                    ? 'bg-[#fe9800] text-white shadow-lg scale-105 border-[#002147]'
-                    : 'bg-white text-[#002147] border-[#002147] hover:bg-gray-50'
-                }`}
+                onClick={() => setShowBulkImportModal(true)}
+                className={ui.btnSecondary}
               >
-                All ({books.length})
+                <Upload className="size-4" />
+                Bulk Import
               </button>
               <button
-                onClick={() => setFilterStatus('Available')}
-                className={`px-4 py-1.5 rounded-lg font-bold transition-all shadow-md text-sm border-2 ${
-                  filterStatus === 'Available'
-                    ? 'bg-[#fe9800] text-white shadow-lg scale-105 border-[#002147]'
-                    : 'bg-white text-[#002147] border-[#002147] hover:bg-gray-50'
-                }`}
+                onClick={() => setShowBulkDeleteModal(true)}
+                className={cn(ui.btnSecondary, 'text-rose-600 hover:bg-rose-500/10 hover:text-rose-700')}
+                title="Delete all books for a selected department"
               >
-                Available ({books.filter(b => b.status === 'Available').length})
+                <Trash2 className="size-4" />
+                Bulk Delete
               </button>
               <button
-                onClick={() => setFilterStatus('Allocated')}
-                className={`px-4 py-1.5 rounded-lg font-bold transition-all shadow-md text-sm border-2 ${
-                  filterStatus === 'Allocated'
-                    ? 'bg-[#002147] text-white shadow-lg scale-105 border-[#fe9800]'
-                    : 'bg-white text-[#002147] border-[#002147] hover:bg-gray-50'
-                }`}
+                onClick={() => {
+                  setEditingBook(null)
+                  setFormData({ name: '', author: '', department: '', edition: '', sr_no: '', status: 'Available' })
+                  setShowModal(true)
+                }}
+                className={ui.btnPrimary}
               >
-                Allocated ({books.filter(b => b.status === 'Allocated').length})
+                <Plus className="size-4" />
+                Add New Book
               </button>
-              <select
-                value={filterDepartment}
-                onChange={(e) => setFilterDepartment(e.target.value)}
-                className="px-4 py-1.5 rounded-lg font-bold transition-all shadow-md text-sm border-2 border-[#002147] bg-white text-[#002147] hover:bg-gray-50 focus:ring-2 focus:ring-[#fe9800] focus:border-[#fe9800] outline-none"
-              >
-                <option value="all">All Departments</option>
-                {departments.map((dept) => (
-                  <option key={dept.id} value={dept.department_name}>
-                    {dept.department_name}
-                  </option>
-                ))}
-              </select>
             </div>
-
-            {/* Mobile: Collapsible Filters */}
-            {showFilters && (
-              <div className="md:hidden flex flex-col gap-2 pt-2 border-t border-gray-200 animate-in slide-in-from-top-2 duration-200">
-                <div className="grid grid-cols-3 gap-1.5">
-                  <button
-                    onClick={() => setFilterStatus('all')}
-                    className={`px-2 py-2 rounded-lg font-bold transition-all text-xs border-2 ${
-                      filterStatus === 'all'
-                        ? 'bg-[#fe9800] text-white border-[#002147]'
-                        : 'bg-white text-[#002147] border-[#002147]'
-                    }`}
-                  >
-                    All ({books.length})
-                  </button>
-                  <button
-                    onClick={() => setFilterStatus('Available')}
-                    className={`px-2 py-2 rounded-lg font-bold transition-all text-xs border-2 ${
-                      filterStatus === 'Available'
-                        ? 'bg-[#fe9800] text-white border-[#002147]'
-                        : 'bg-white text-[#002147] border-[#002147]'
-                    }`}
-                  >
-                    Avail ({books.filter(b => b.status === 'Available').length})
-                  </button>
-                  <button
-                    onClick={() => setFilterStatus('Allocated')}
-                    className={`px-2 py-2 rounded-lg font-bold transition-all text-xs border-2 ${
-                      filterStatus === 'Allocated'
-                        ? 'bg-[#002147] text-white border-[#fe9800]'
-                        : 'bg-white text-[#002147] border-[#002147]'
-                    }`}
-                  >
-                    Alloc ({books.filter(b => b.status === 'Allocated').length})
-                  </button>
-                </div>
-                <select
-                  value={filterDepartment}
-                  onChange={(e) => setFilterDepartment(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg font-bold text-xs border-2 border-[#002147] bg-white text-[#002147] focus:ring-2 focus:ring-[#fe9800] focus:border-[#fe9800] outline-none"
-                >
-                  <option value="all">All Departments</option>
-                  {departments.map((dept) => (
-                    <option key={dept.id} value={dept.department_name}>
-                      {dept.department_name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {/* Mobile: Collapsible Actions */}
-            {showActions && (
-              <div className="md:hidden flex flex-col gap-2 pt-2 border-t border-gray-200 animate-in slide-in-from-top-2 duration-200">
-                <button
-                  onClick={() => {
-                    setShowBulkImportModal(true)
-                    setShowActions(false)
-                  }}
-                  className="flex items-center justify-center gap-2 px-4 py-2.5 bg-[#002147] text-white rounded-lg font-bold text-sm border-2 border-[#fe9800]"
-                >
-                  <Upload className="w-4 h-4" />
-                  Bulk Import
-                </button>
-                <button
-                  onClick={() => {
-                    setShowBulkDeleteModal(true)
-                    setShowActions(false)
-                  }}
-                  className="flex items-center justify-center gap-2 px-4 py-2.5 bg-red-600 text-white rounded-lg font-bold text-sm border-2 border-[#fe9800]"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  Bulk Delete
-                </button>
-              </div>
-            )}
           </div>
+
+          {/* Desktop: Always show filters inline */}
+          <div className="hidden flex-wrap items-center gap-2 md:flex">
+            <div className="flex items-center gap-0.5 rounded-xl border border-edge/80 bg-surface/50 p-0.5">
+              <button onClick={() => setFilterStatus('all')} className={segBtn(filterStatus === 'all')}>
+                All <span className="tabular-nums opacity-80">({books.length})</span>
+              </button>
+              <button onClick={() => setFilterStatus('Available')} className={segBtn(filterStatus === 'Available')}>
+                Available <span className="tabular-nums opacity-80">({books.filter(b => b.status === 'Available').length})</span>
+              </button>
+              <button onClick={() => setFilterStatus('Allocated')} className={segBtn(filterStatus === 'Allocated')}>
+                Allocated <span className="tabular-nums opacity-80">({books.filter(b => b.status === 'Allocated').length})</span>
+              </button>
+            </div>
+            <Select
+              label="Department"
+              value={filterDepartment}
+              onChange={setFilterDepartment}
+              options={[['all', 'All Departments'], ...deptOptions]}
+              searchPlaceholder="Search departments…"
+              className="min-w-[13rem]"
+            />
+          </div>
+
+          {/* Mobile: Collapsible Filters */}
+          {showFilters && (
+            <div className="fade-in flex flex-col gap-2 border-t border-glass-line pt-2.5 md:hidden">
+              <div className="grid grid-cols-3 gap-0.5 rounded-xl border border-edge/80 bg-surface/50 p-0.5">
+                <button onClick={() => setFilterStatus('all')} className={cn(segBtn(filterStatus === 'all'), 'justify-center px-1.5 text-[11.5px]')}>
+                  All ({books.length})
+                </button>
+                <button onClick={() => setFilterStatus('Available')} className={cn(segBtn(filterStatus === 'Available'), 'justify-center px-1.5 text-[11.5px]')}>
+                  Avail ({books.filter(b => b.status === 'Available').length})
+                </button>
+                <button onClick={() => setFilterStatus('Allocated')} className={cn(segBtn(filterStatus === 'Allocated'), 'justify-center px-1.5 text-[11.5px]')}>
+                  Alloc ({books.filter(b => b.status === 'Allocated').length})
+                </button>
+              </div>
+              <Select
+                variant="field"
+                label="Department"
+                value={filterDepartment}
+                onChange={setFilterDepartment}
+                options={[['all', 'All Departments'], ...deptOptions]}
+                searchPlaceholder="Search departments…"
+              />
+            </div>
+          )}
+
+          {/* Mobile: Collapsible Actions */}
+          {showActions && (
+            <div className="fade-in grid grid-cols-2 gap-2 border-t border-glass-line pt-2.5 md:hidden">
+              <button
+                onClick={() => {
+                  setShowBulkImportModal(true)
+                  setShowActions(false)
+                }}
+                className={ui.btnSecondary}
+              >
+                <Upload className="size-4" />
+                Bulk Import
+              </button>
+              <button
+                onClick={() => {
+                  setShowBulkDeleteModal(true)
+                  setShowActions(false)
+                }}
+                className={cn(ui.btnSecondary, 'text-rose-600 hover:bg-rose-500/10 hover:text-rose-700')}
+              >
+                <Trash2 className="size-4" />
+                Bulk Delete
+              </button>
+            </div>
+          )}
+        </div>
+      </GlassCard>
+
+      {/* Books Table */}
+      <GlassCard index={1} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="flex items-center justify-between gap-2 border-b border-glass-line px-3.5 py-2">
+          <h3 className="flex items-center gap-1.5 text-[13px] font-semibold text-ink">
+            <BookOpen className="size-4 text-brand-500" />
+            Complete Book Collection
+          </h3>
+          <span className="text-[11.5px] tabular-nums text-ink-muted">{filteredBooks.length} books</span>
         </div>
 
-        {/* Books Table - Increased Viewport */}
-        <div className="bg-white rounded-xl border-2 border-[#fe9800] overflow-hidden shadow-xl flex-1 flex flex-col">
-          <div className="bg-[#002147] px-3 py-1.5 border-b-2 border-[#fe9800]">
-            <h3 className="text-sm font-bold text-white font-serif flex items-center gap-1.5">
-              <BookOpen className="w-4 h-4" />
-              Complete Book Collection
-            </h3>
-          </div>
-
-          {/* Mobile Card View */}
-          <div className="md:hidden overflow-y-auto flex-1 p-2 space-y-2">
-            {filteredBooks.length === 0 ? (
-              <div className="flex flex-col items-center py-8">
-                <div className="w-14 h-16 bg-[#fe9800] rounded shadow-lg flex items-center justify-center mb-3 border-2 border-[#002147]">
-                  <BookOpen className="w-6 h-6 text-white" />
-                </div>
-                <p className="text-[#002147] text-sm font-serif font-medium text-center">
-                  {searchQuery ? 'No books found' : 'No books yet'}
-                </p>
-                <p className="text-gray-600 text-xs mt-1 text-center">
-                  {searchQuery ? 'Try different search' : 'Tap + to add books'}
-                </p>
-              </div>
-            ) : (
-              paginatedBooks.map((book) => (
-                <div
-                  key={book.id}
-                  className="bg-gray-50 rounded-lg p-3 border border-gray-200 shadow-sm"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-[10px] font-bold text-[#fe9800] bg-[#002147] px-1.5 py-0.5 rounded">
-                          #{book.sr_no || 'N/A'}
-                        </span>
-                        <button
-                          onClick={() => toggleBookStatus(book)}
-                          className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                            book.status === 'Available'
-                              ? 'bg-[#fe9800] text-white'
-                              : 'bg-[#002147] text-white'
-                          }`}
-                        >
+        {/* Mobile Card View */}
+        <div className="scroll-quiet min-h-0 flex-1 space-y-2 overflow-auto p-2.5 md:hidden">
+          {filteredBooks.length === 0 ? (
+            <EmptyState
+              icon={BookOpen}
+              title={searchQuery ? 'No books found' : 'No books yet'}
+              hint={searchQuery ? 'Try different search' : 'Tap + to add books'}
+            />
+          ) : (
+            paginatedBooks.map((book) => (
+              <div
+                key={book.id}
+                className="rounded-xl border border-glass-line bg-surface/60 p-3"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-1 flex items-center gap-2">
+                      <span className="rounded-md bg-navy-900/5 px-1.5 py-0.5 text-[10.5px] font-semibold tabular-nums text-ink-soft">
+                        #{book.sr_no || 'N/A'}
+                      </span>
+                      <button onClick={() => toggleBookStatus(book)}>
+                        <Pill tone={book.status === 'Available' ? 'success' : 'brand'}>
                           {book.status === 'Available' ? 'Avail' : 'Alloc'}
-                        </button>
-                      </div>
-                      <h4 className="text-sm font-bold text-[#002147] truncate">{book.name}</h4>
-                      <p className="text-xs text-gray-600 truncate">{book.author || 'Unknown Author'}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-[10px] text-gray-500 bg-gray-200 px-1.5 py-0.5 rounded truncate max-w-[120px]">
-                          {book.department}
-                        </span>
-                        {book.edition && (
-                          <span className="text-[10px] text-gray-500">Ed: {book.edition}</span>
-                        )}
-                      </div>
-                      {book.status === 'Allocated' && book.reservations?.[0]?.reserver_name && (
-                        <p className="text-[10px] text-[#002147] mt-1 font-medium">
-                          To: {book.reservations[0].reserver_name}
-                        </p>
+                        </Pill>
+                      </button>
+                    </div>
+                    <h4 className="truncate text-[13px] font-semibold text-ink">{book.name}</h4>
+                    <p className="truncate text-[12px] text-ink-soft">{book.author || 'Unknown Author'}</p>
+                    <div className="mt-1 flex items-center gap-2">
+                      <span className="max-w-[120px] truncate rounded-md bg-navy-900/5 px-1.5 py-0.5 text-[10.5px] text-ink-muted">
+                        {book.department}
+                      </span>
+                      {book.edition && (
+                        <span className="text-[10.5px] text-ink-muted">Ed: {book.edition}</span>
                       )}
                     </div>
-                    <button
-                      onClick={() => openEditModal(book)}
-                      className="p-2 text-white bg-[#fe9800] hover:bg-[#002147] rounded-lg transition-all border border-[#002147] flex-shrink-0"
-                      title="Edit Book"
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
+                    {book.status === 'Allocated' && book.reservations?.[0]?.reserver_name && (
+                      <p className="mt-1 text-[11px] font-medium text-ink-soft">
+                        To: {book.reservations[0].reserver_name}
+                      </p>
+                    )}
                   </div>
+                  <button
+                    onClick={() => openEditModal(book)}
+                    className={cn(ui.iconBtn, 'shrink-0')}
+                    title="Edit Book"
+                  >
+                    <Pencil className="size-4" />
+                  </button>
                 </div>
-              ))
-            )}
-          </div>
+              </div>
+            ))
+          )}
+        </div>
 
-          {/* Desktop Table View */}
-          <div className="hidden md:block overflow-x-auto overflow-y-auto flex-1 scrollbar-hide">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b-2 border-[#fe9800] sticky top-0">
+        {/* Desktop Table View */}
+        <div className="scroll-quiet hidden min-h-0 flex-1 overflow-auto md:block">
+          <table className={ui.table}>
+            <thead className={ui.thead}>
+              <tr>
+                <th className={ui.th}>Sr No</th>
+                <th className={ui.th}>Book Title</th>
+                <th className={ui.th}>Author</th>
+                <th className={ui.th}>Department</th>
+                <th className={ui.th}>Edition</th>
+                <th className={ui.th}>Status</th>
+                <th className={ui.th}>Allocated To</th>
+                <th className={cn(ui.th, 'text-right')}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredBooks.length === 0 ? (
                 <tr>
-                  <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">
-                    Sr No
-                  </th>
-                  <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">
-                    Book Title
-                  </th>
-                  <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">
-                    Author
-                  </th>
-                  <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">
-                    Department
-                  </th>
-                  <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">
-                    Edition
-                  </th>
-                  <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">
-                    Status
-                  </th>
-                  <th className="px-3 py-2 text-left text-xs font-bold text-[#002147] uppercase tracking-tight">
-                    Allocated To
-                  </th>
-                  <th className="px-3 py-2 text-right text-xs font-bold text-[#002147] uppercase tracking-tight">
-                    Actions
-                  </th>
+                  <td colSpan="8">
+                    <EmptyState
+                      icon={BookOpen}
+                      title={searchQuery ? 'No books found matching your search.' : 'No books in the library yet'}
+                      hint={searchQuery ? 'Try a different search term' : 'Click "Add New Book" to begin building your collection'}
+                    />
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {filteredBooks.length === 0 ? (
-                  <tr>
-                    <td colSpan="8" className="px-6 py-12 text-center bg-white">
-                      <div className="flex flex-col items-center">
-                        <div className="w-16 h-20 bg-[#fe9800] rounded shadow-lg flex items-center justify-center mb-3 border-2 border-[#002147]">
-                          <BookOpen className="w-8 h-8 text-white" />
-                        </div>
-                        <p className="text-[#002147] text-base font-serif font-medium">
-                          {searchQuery ? 'No books found matching your search.' : 'No books in the library yet'}
-                        </p>
-                        <p className="text-gray-600 text-xs mt-2">
-                          {searchQuery ? 'Try a different search term' : 'Click "Add New Book" to begin building your collection'}
-                        </p>
-                      </div>
+              ) : (
+                paginatedBooks.map((book) => (
+                  <tr key={book.id} className={ui.tr}>
+                    <td className={cn(ui.td, 'py-2 font-semibold tabular-nums text-ink')}>
+                      {book.sr_no || 'N/A'}
+                    </td>
+                    <td className={cn(ui.td, 'py-2 font-semibold text-ink')}>
+                      {book.name}
+                    </td>
+                    <td className={cn(ui.td, 'py-2')}>
+                      {book.author}
+                    </td>
+                    <td className={cn(ui.td, 'py-2')}>
+                      {book.department}
+                    </td>
+                    <td className={cn(ui.td, 'py-2 text-ink-muted')}>
+                      {book.edition || 'N/A'}
+                    </td>
+                    <td className={cn(ui.td, 'py-2')}>
+                      <button
+                        onClick={() => toggleBookStatus(book)}
+                        className="rounded-full transition hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500"
+                        title={`Click to change to ${book.status === 'Available' ? 'Allocated' : 'Available'}`}
+                      >
+                        <Pill tone={book.status === 'Available' ? 'success' : 'brand'}>{book.status}</Pill>
+                      </button>
+                    </td>
+                    <td className={cn(ui.td, 'py-2')}>
+                      {book.status === 'Allocated' && book.reservations?.[0]?.reserver_name
+                        ? book.reservations[0].reserver_name
+                        : <span className="text-ink-muted">-</span>}
+                    </td>
+                    <td className={cn(ui.td, 'py-1.5 text-right')}>
+                      <button
+                        onClick={() => openEditModal(book)}
+                        className={cn(ui.iconBtn, 'ml-auto')}
+                        title="Edit Book"
+                      >
+                        <Pencil className="size-4" />
+                      </button>
                     </td>
                   </tr>
-                ) : (
-                  paginatedBooks.map((book, index) => (
-                    <tr key={book.id} className={`hover:bg-gray-50 transition-all ${
-                      index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'
-                    }`}>
-                      <td className="px-3 py-2 text-gray-700 font-bold text-xs">
-                        {book.sr_no || 'N/A'}
-                      </td>
-                      <td className="px-3 py-2 text-gray-700 font-bold text-[#002147] text-xs">
-                        {book.name}
-                      </td>
-                      <td className="px-3 py-2 text-gray-700 font-medium text-xs">
-                        {book.author}
-                      </td>
-                      <td className="px-3 py-2 text-gray-700 font-medium text-xs">
-                        {book.department}
-                      </td>
-                      <td className="px-3 py-2 text-gray-700 font-medium text-xs">
-                        {book.edition || 'N/A'}
-                      </td>
-                      <td className="px-3 py-2">
-                        <button
-                          onClick={() => toggleBookStatus(book)}
-                          className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-bold transition-all hover:shadow-md hover:scale-105 border cursor-pointer ${
-                            book.status === 'Available'
-                              ? 'bg-[#fe9800] text-white border-[#002147]'
-                              : 'bg-[#002147] text-white border-[#fe9800]'
-                          }`}
-                          title={`Click to change to ${book.status === 'Available' ? 'Allocated' : 'Available'}`}
-                        >
-                          <span className={`w-1.5 h-1.5 rounded-full ${
-                            book.status === 'Available' ? 'bg-white' : 'bg-[#fe9800]'
-                          }`}></span>
-                          <span>{book.status}</span>
-                        </button>
-                      </td>
-                      <td className="px-3 py-2 text-gray-700 font-medium text-xs">
-                        {book.status === 'Allocated' && book.reservations?.[0]?.reserver_name
-                          ? book.reservations[0].reserver_name
-                          : '-'}
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <button
-                          onClick={() => openEditModal(book)}
-                          className="p-1.5 text-white bg-[#fe9800] hover:bg-[#002147] rounded transition-all font-medium border border-[#002147]"
-                          title="Edit Book"
-                        >
-                          <Pencil className="w-3 h-3" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
 
-          {/* Pagination Controls */}
-          {filteredBooks.length > 0 && (
-            <div className="px-2 md:px-4 py-2 md:py-3 bg-gray-50 border-t-2 border-[#002147]">
-              {/* Mobile Pagination */}
-              <div className="md:hidden flex flex-col gap-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <label className="text-[10px] font-semibold text-[#002147]">Show:</label>
-                    <select
-                      value={itemsPerPage}
-                      onChange={(e) => setItemsPerPage(Number(e.target.value))}
-                      className="px-1.5 py-1 border border-gray-300 rounded text-[10px] font-medium text-[#002147] focus:outline-none focus:border-[#fe9800]"
-                    >
-                      <option value={10}>10</option>
-                      <option value={50}>50</option>
-                      <option value={100}>100</option>
-                    </select>
-                  </div>
-                  <p className="text-[10px] text-gray-600">
-                    <span className="font-semibold text-[#002147]">{startIndex + 1}-{Math.min(endIndex, filteredBooks.length)}</span> of{' '}
-                    <span className="font-semibold text-[#002147]">{filteredBooks.length}</span>
-                  </p>
+        {/* Pagination Controls */}
+        {filteredBooks.length > 0 && (
+          <div className="border-t border-glass-line px-3 py-2">
+            {/* Mobile Pagination */}
+            <div className="flex flex-col gap-2 md:hidden">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <label className="text-[11px] font-medium text-ink-muted">Show:</label>
+                  <Select
+                    variant="compact"
+                    label="Books per page"
+                    value={itemsPerPage}
+                    onChange={(v) => setItemsPerPage(Number(v))}
+                    options={PER_PAGE_OPTIONS}
+                  />
                 </div>
+                <p className="text-[11px] text-ink-muted">
+                  <span className="font-semibold text-ink">{startIndex + 1}-{Math.min(endIndex, filteredBooks.length)}</span> of{' '}
+                  <span className="font-semibold text-ink">{filteredBooks.length}</span>
+                </p>
+              </div>
+              {totalPages > 1 && (
+                <div className="flex items-center justify-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                    className={pagerBtn}
+                  >
+                    Prev
+                  </button>
+                  <span className="text-[12px] font-semibold tabular-nums text-ink-soft">
+                    {currentPage}/{totalPages}
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage === totalPages}
+                    className={pagerBtn}
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Desktop Pagination */}
+            <div className="hidden items-center justify-between md:flex">
+              <div className="flex items-center gap-2">
+                <label className="text-[12px] font-medium text-ink-muted">Show:</label>
+                <Select
+                  variant="compact"
+                  label="Books per page"
+                  value={itemsPerPage}
+                  onChange={(v) => setItemsPerPage(Number(v))}
+                  options={PER_PAGE_OPTIONS}
+                />
+                <span className="text-[12px] text-ink-muted">per page</span>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <p className="text-[12px] text-ink-muted">
+                  Showing <span className="font-semibold text-ink">{startIndex + 1}</span> to{' '}
+                  <span className="font-semibold text-ink">{Math.min(endIndex, filteredBooks.length)}</span> of{' '}
+                  <span className="font-semibold text-ink">{filteredBooks.length}</span> books
+                </p>
+
                 {totalPages > 1 && (
-                  <div className="flex items-center justify-center gap-2">
+                  <div className="flex items-center gap-1">
                     <button
                       onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                       disabled={currentPage === 1}
-                      className="px-3 py-1.5 border-2 border-[#002147] rounded text-xs font-bold text-[#002147] disabled:opacity-30 disabled:cursor-not-allowed hover:bg-[#fe9800] hover:text-white transition-colors"
+                      className={pagerBtn}
                     >
                       Prev
                     </button>
-                    <span className="text-xs font-semibold text-[#002147]">
-                      {currentPage}/{totalPages}
+                    <span className="px-2 text-[12px] font-semibold tabular-nums text-ink-soft">
+                      Page {currentPage} of {totalPages}
                     </span>
                     <button
                       onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                       disabled={currentPage === totalPages}
-                      className="px-3 py-1.5 border-2 border-[#002147] rounded text-xs font-bold text-[#002147] disabled:opacity-30 disabled:cursor-not-allowed hover:bg-[#fe9800] hover:text-white transition-colors"
+                      className={pagerBtn}
                     >
                       Next
                     </button>
                   </div>
                 )}
               </div>
-
-              {/* Desktop Pagination */}
-              <div className="hidden md:flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <label className="text-xs font-semibold text-[#002147]">Show:</label>
-                  <select
-                    value={itemsPerPage}
-                    onChange={(e) => setItemsPerPage(Number(e.target.value))}
-                    className="px-2 py-1 border-2 border-gray-300 rounded text-xs font-medium text-[#002147] focus:outline-none focus:border-[#fe9800]"
-                  >
-                    <option value={10}>10</option>
-                    <option value={50}>50</option>
-                    <option value={100}>100</option>
-                  </select>
-                  <span className="text-xs text-gray-600">per page</span>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <p className="text-xs text-gray-600">
-                    Showing <span className="font-semibold text-[#002147]">{startIndex + 1}</span> to{' '}
-                    <span className="font-semibold text-[#002147]">{Math.min(endIndex, filteredBooks.length)}</span> of{' '}
-                    <span className="font-semibold text-[#002147]">{filteredBooks.length}</span> books
-                  </p>
-
-                  {totalPages > 1 && (
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                        disabled={currentPage === 1}
-                        className="px-2 py-1 border-2 border-[#002147] rounded text-xs font-bold text-[#002147] disabled:opacity-30 disabled:cursor-not-allowed hover:bg-[#fe9800] hover:text-white transition-colors"
-                      >
-                        Prev
-                      </button>
-                      <span className="text-xs font-semibold text-[#002147] px-2">
-                        Page {currentPage} of {totalPages}
-                      </span>
-                      <button
-                        onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                        disabled={currentPage === totalPages}
-                        className="px-2 py-1 border-2 border-[#002147] rounded text-xs font-bold text-[#002147] disabled:opacity-30 disabled:cursor-not-allowed hover:bg-[#fe9800] hover:text-white transition-colors"
-                      >
-                        Next
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
             </div>
-          )}
-        </div>
-      </div>
+          </div>
+        )}
+      </GlassCard>
 
-      {/* Add/Edit Modal - Right Sidebar */}
+      {/* Add/Edit Modal */}
       {showModal && (
-        <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-end"
-          onClick={() => {
+        <Modal
+          onClose={() => {
             setShowModal(false)
             setEditingBook(null)
             setFormData({ name: '', author: '', department: '', edition: '', sr_no: '', status: 'Available' })
           }}
+          title={editingBook ? 'Edit Book Details' : 'Add New Book'}
+          icon={BookOpen}
+          size="md"
+          footer={
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowModal(false)
+                  setEditingBook(null)
+                  setFormData({ name: '', author: '', department: '', edition: '', sr_no: '', status: 'Available' })
+                }}
+                className={ui.btnSecondary}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                form="book-form"
+                className={ui.btnPrimary}
+              >
+                {editingBook ? 'Update Book' : 'Add Book'}
+              </button>
+            </>
+          }
         >
-          <div
-            className="bg-white h-full w-full max-w-md shadow-2xl border-l-2 border-[#fe9800] overflow-y-auto animate-slide-in-right"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="bg-[#002147] px-5 py-4 sticky top-0 z-10 border-b-2 border-[#fe9800]">
-              <h2 className="text-xl font-bold text-white font-serif flex items-center gap-2">
-                <BookOpen className="w-6 h-6" />
-                {editingBook ? 'Edit Book Details' : 'Add New Book'}
-              </h2>
+          <form id="book-form" onSubmit={handleSubmit} className="space-y-3">
+            <div>
+              <label className={ui.label}>
+                Book Title *
+              </label>
+              <input
+                type="text"
+                required
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                className={ui.input}
+                placeholder="Enter book title"
+              />
             </div>
-            <div className="p-6">
 
-            <form onSubmit={handleSubmit} className="space-y-5">
-              <div>
-                <label className="block text-xs font-bold text-[#002147] mb-2 uppercase tracking-wide">
-                  Book Title *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3 py-3 border-2 border-gray-200 rounded-lg bg-gray-50 text-gray-900 focus:ring-2 focus:ring-[#fe9800] focus:border-[#fe9800] outline-none transition-all font-medium"
-                  placeholder="Enter book title"
-                />
-              </div>
+            <div>
+              <label className={ui.label}>
+                Author Name
+              </label>
+              <input
+                type="text"
+                value={formData.author}
+                onChange={(e) => setFormData({ ...formData, author: e.target.value })}
+                className={ui.input}
+                placeholder="Enter author name (optional)"
+              />
+            </div>
 
-              <div>
-                <label className="block text-xs font-bold text-[#002147] mb-2 uppercase tracking-wide">
-                  Author Name
-                </label>
-                <input
-                  type="text"
-                  value={formData.author}
-                  onChange={(e) => setFormData({ ...formData, author: e.target.value })}
-                  className="w-full px-3 py-3 border-2 border-gray-200 rounded-lg bg-gray-50 text-gray-900 focus:ring-2 focus:ring-[#fe9800] focus:border-[#fe9800] outline-none transition-all font-medium"
-                  placeholder="Enter author name (optional)"
-                />
-              </div>
+            <div>
+              <label className={ui.label}>
+                Department *
+              </label>
+              <Select
+                variant="field"
+                required
+                label="Department"
+                placeholder="Select a department"
+                value={formData.department}
+                onChange={(v) => setFormData({ ...formData, department: v })}
+                options={deptOptions}
+                searchPlaceholder="Search departments…"
+              />
+            </div>
 
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
-                <label className="block text-xs font-bold text-[#002147] mb-2 uppercase tracking-wide">
-                  Department *
-                </label>
-                <select
-                  required
-                  value={formData.department}
-                  onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                  className="w-full px-3 py-3 border-2 border-gray-200 rounded-lg bg-gray-50 text-gray-900 focus:ring-2 focus:ring-[#fe9800] focus:border-[#fe9800] outline-none transition-all font-medium"
-                >
-                  <option value="">Select a department</option>
-                  {departments.map((dept) => (
-                    <option key={dept.id} value={dept.department_name}>
-                      {dept.department_name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-[#002147] mb-2 uppercase tracking-wide">
+                <label className={ui.label}>
                   Edition
                 </label>
                 <input
                   type="text"
                   value={formData.edition}
                   onChange={(e) => setFormData({ ...formData, edition: e.target.value })}
-                  className="w-full px-3 py-3 border-2 border-gray-200 rounded-lg bg-gray-50 text-gray-900 focus:ring-2 focus:ring-[#fe9800] focus:border-[#fe9800] outline-none transition-all font-medium"
+                  className={ui.input}
                   placeholder="e.g., 1st Edition, 2nd Edition"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-[#002147] mb-2 uppercase tracking-wide">
+                <label className={ui.label}>
                   Serial Number
                 </label>
                 <input
                   type="text"
                   value={formData.sr_no}
                   onChange={(e) => setFormData({ ...formData, sr_no: e.target.value })}
-                  className="w-full px-3 py-3 border-2 border-gray-200 rounded-lg bg-gray-50 text-gray-900 focus:ring-2 focus:ring-[#fe9800] focus:border-[#fe9800] outline-none transition-all font-medium"
+                  className={ui.input}
                   placeholder="Enter serial number"
                 />
               </div>
+            </div>
 
-              <div>
-                <label className="block text-xs font-bold text-[#002147] mb-2 uppercase tracking-wide">
-                  Availability Status *
-                </label>
-                <select
-                  required
-                  value={formData.status}
-                  onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                  className="w-full px-3 py-3 border-2 border-gray-200 rounded-lg bg-gray-50 text-gray-900 focus:ring-2 focus:ring-[#fe9800] focus:border-[#fe9800] outline-none transition-all font-medium"
-                >
-                  <option value="Available">Available</option>
-                  <option value="Allocated">Allocated</option>
-                </select>
-              </div>
+            <div>
+              <label className={ui.label}>
+                Availability Status *
+              </label>
+              <Select
+                variant="field"
+                required
+                label="Availability status"
+                value={formData.status}
+                onChange={(v) => setFormData({ ...formData, status: v })}
+                options={[['Available', 'Available'], ['Allocated', 'Allocated']]}
+              />
+            </div>
 
-              <div className="flex gap-3 pt-4 border-t-2 border-[#002147]">
+            {editingBook && (
+              <div className="border-t border-glass-line pt-3">
                 <button
                   type="button"
                   onClick={() => {
                     setShowModal(false)
-                    setEditingBook(null)
-                    setFormData({ name: '', author: '', department: '', edition: '', status: 'Available' })
+                    openDeleteModal(editingBook)
                   }}
-                  className="flex-1 px-4 py-3 border-2 border-[#002147] text-[#002147] rounded-lg hover:bg-gray-100 transition-all font-bold"
+                  className={cn(ui.btnSecondary, 'w-full text-rose-600 hover:bg-rose-500/10 hover:text-rose-700')}
                 >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 px-4 py-3 bg-[#fe9800] text-white rounded-lg hover:shadow-xl hover:scale-105 transition-all font-bold border-2 border-[#002147]"
-                >
-                  {editingBook ? 'Update Book' : 'Add Book'}
+                  <Trash2 className="size-4" />
+                  Delete This Book
                 </button>
               </div>
-
-              {editingBook && (
-                <div className="pt-4 mt-4 border-t-2 border-red-200">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowModal(false)
-                      openDeleteModal(editingBook)
-                    }}
-                    className="w-full px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 hover:shadow-xl transition-all font-bold flex items-center justify-center gap-2"
-                  >
-                    <Trash2 className="w-5 h-5" />
-                    Delete This Book
-                  </button>
-                </div>
-              )}
-            </form>
-            </div>
-          </div>
-        </div>
+            )}
+          </form>
+        </Modal>
       )}
 
-      {/* Delete Confirmation Modal - Right Sidebar */}
+      {/* Delete Confirmation Modal */}
       {showDeleteModal && bookToDelete && (
-        <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-end"
-          onClick={() => {
+        <Modal
+          onClose={() => {
             setShowDeleteModal(false)
             setBookToDelete(null)
           }}
+          title="Confirm Deletion"
+          subtitle="Are you sure you want to remove this book from the library?"
+          icon={AlertTriangle}
+          size="sm"
+          footer={
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDeleteModal(false)
+                  setBookToDelete(null)
+                }}
+                className={ui.btnSecondary}
+              >
+                Keep Book
+              </button>
+              <button
+                type="button"
+                onClick={confirmDelete}
+                className={ui.btnDanger}
+              >
+                Delete Permanently
+              </button>
+            </>
+          }
         >
-          <div
-            className="bg-white h-full w-full max-w-md shadow-2xl border-l-2 border-[#fe9800] overflow-y-auto animate-slide-in-right"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="bg-[#002147] px-5 py-4 sticky top-0 z-10 border-b-2 border-[#fe9800]">
-              <h2 className="text-xl font-bold text-white font-serif flex items-center gap-2">
-                <AlertTriangle className="w-6 h-6" />
-                Confirm Deletion
-              </h2>
-            </div>
+          <div className="space-y-3">
+            <p className="text-[14px] font-semibold text-heading">
+              "{bookToDelete.name}"
+            </p>
 
-            <div className="p-6">
-              <div className="flex flex-col items-center text-center">
-                {/* Warning Icon */}
-                <div className="w-16 h-20 bg-[#fe9800] rounded-lg shadow-lg flex items-center justify-center mb-4 border-2 border-[#002147]">
-                  <BookOpen className="w-8 h-8 text-white" />
-                </div>
-
-                {/* Description */}
-                <p className="text-gray-700 mb-3 text-base font-medium">
-                  Are you sure you want to remove this book from the library?
-                </p>
-                <p className="text-[#fe9800] font-bold text-lg mb-6 font-serif">
-                  "{bookToDelete.name}"
-                </p>
-
-                {/* Book Details Card */}
-                <div className="w-full bg-gray-50 rounded-lg p-4 mb-6 border-2 border-[#002147]">
-                  <div className="space-y-2.5 text-sm">
-                    <div className="flex justify-between items-center p-2.5 bg-white rounded border border-[#002147]">
-                      <span className="text-[#002147] font-bold">Author:</span>
-                      <span className="font-medium text-gray-900">{bookToDelete.author}</span>
-                    </div>
-                    <div className="flex justify-between items-center p-2.5 bg-white rounded border border-[#002147]">
-                      <span className="text-[#002147] font-bold">Department:</span>
-                      <span className="font-medium text-gray-900">{bookToDelete.department}</span>
-                    </div>
-                    <div className="flex justify-between items-center p-2.5 bg-white rounded border border-[#002147]">
-                      <span className="text-[#002147] font-bold">Edition:</span>
-                      <span className="font-medium text-gray-900">{bookToDelete.edition || 'N/A'}</span>
-                    </div>
-                    <div className="flex justify-between items-center p-2.5 bg-white rounded border border-[#002147]">
-                      <span className="text-[#002147] font-bold">Status:</span>
-                      <span className={`font-bold ${
-                        bookToDelete.status === 'Available'
-                          ? 'text-[#fe9800]'
-                          : 'text-[#002147]'
-                      }`}>
-                        {bookToDelete.status}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <p className="text-sm text-gray-500 italic mb-6">
-                  This action cannot be undone. The book will be permanently removed from the database.
-                </p>
-
-                {/* Action Buttons */}
-                <div className="flex gap-3 w-full">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowDeleteModal(false)
-                      setBookToDelete(null)
-                    }}
-                    className="flex-1 px-4 py-3 border-2 border-[#002147] text-[#002147] rounded-lg hover:bg-gray-100 transition-all font-bold"
-                  >
-                    Keep Book
-                  </button>
-                  <button
-                    type="button"
-                    onClick={confirmDelete}
-                    className="flex-1 px-4 py-3 bg-[#002147] text-white rounded-lg hover:shadow-xl hover:scale-105 transition-all font-bold border-2 border-[#fe9800]"
-                  >
-                    Delete Permanently
-                  </button>
-                </div>
+            {/* Book Details Card */}
+            <dl className="divide-y divide-glass-line rounded-xl border border-glass-line bg-surface/60 text-[12.5px]">
+              <div className="flex items-center justify-between gap-3 px-3 py-2">
+                <dt className="text-ink-muted">Author:</dt>
+                <dd className="font-medium text-ink">{bookToDelete.author}</dd>
               </div>
-            </div>
+              <div className="flex items-center justify-between gap-3 px-3 py-2">
+                <dt className="text-ink-muted">Department:</dt>
+                <dd className="font-medium text-ink">{bookToDelete.department}</dd>
+              </div>
+              <div className="flex items-center justify-between gap-3 px-3 py-2">
+                <dt className="text-ink-muted">Edition:</dt>
+                <dd className="font-medium text-ink">{bookToDelete.edition || 'N/A'}</dd>
+              </div>
+              <div className="flex items-center justify-between gap-3 px-3 py-2">
+                <dt className="text-ink-muted">Status:</dt>
+                <dd>
+                  <Pill tone={bookToDelete.status === 'Available' ? 'success' : 'brand'}>{bookToDelete.status}</Pill>
+                </dd>
+              </div>
+            </dl>
+
+            <p className="flex items-start gap-1.5 rounded-xl bg-rose-500/8 px-3 py-2 text-[12px] text-rose-700">
+              <AlertTriangle className="mt-px size-3.5 shrink-0" />
+              This action cannot be undone. The book will be permanently removed from the database.
+            </p>
           </div>
-        </div>
+        </Modal>
       )}
 
-      {/* Bulk Import Modal - Right Sidebar */}
+      {/* Bulk Import Modal */}
       {showBulkImportModal && (
-        <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-end"
-          onClick={() => {
+        <Modal
+          onClose={() => {
             setShowBulkImportModal(false)
             setImportFile(null)
             setImportPreview([])
             setImportErrors([])
           }}
+          title="Bulk Import Books"
+          icon={FileSpreadsheet}
+          size="md"
+          footer={
+            <>
+              <button
+                type="button"
+                onClick={resetBulkImport}
+                className={ui.btnSecondary}
+                disabled={importing}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleBulkImport}
+                disabled={importing || importPreview.length === 0}
+                className={ui.btnPrimary}
+              >
+                {importing ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <span className="size-4 animate-spin rounded-full border-2 border-white/40 border-t-white"></span>
+                    Importing...
+                  </span>
+                ) : (
+                  `Import ${importPreview.length} Books`
+                )}
+              </button>
+            </>
+          }
         >
-          <div
-            className="bg-white h-full w-full max-w-md shadow-2xl border-l-2 border-[#fe9800] overflow-y-auto animate-slide-in-right"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="bg-[#002147] px-5 py-4 sticky top-0 z-10 border-b-2 border-[#fe9800]">
-              <h2 className="text-xl font-bold text-white font-serif flex items-center gap-2">
-                <FileSpreadsheet className="w-6 h-6" />
-                Bulk Import Books
-              </h2>
-            </div>
-            <div className="p-6">
-              <div className="space-y-5">
-                {/* File Upload Section */}
-                <div>
-                  <label className="block text-xs font-bold text-[#002147] mb-2 uppercase tracking-wide">
-                    Upload File (CSV or XLSX)
-                  </label>
-                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-[#fe9800] transition-colors">
-                    <input
-                      type="file"
-                      accept=".csv,.xlsx,.xls"
-                      onChange={handleFileChange}
-                      className="hidden"
-                      id="bulk-import-file"
-                    />
-                    <label htmlFor="bulk-import-file" className="cursor-pointer">
-                      <Upload className="w-10 h-10 mx-auto text-[#fe9800] mb-3" />
-                      <p className="text-sm font-medium text-gray-700">
-                        {importFile ? importFile.name : 'Click to upload or drag and drop'}
-                      </p>
-                      <p className="text-xs text-gray-500 mt-1">
-                        CSV, XLS, or XLSX files only
-                      </p>
-                    </label>
-                  </div>
-                </div>
-
-                {/* Expected Format */}
-                <div className="bg-gray-50 rounded-lg p-4 border-2 border-[#002147]">
-                  <h4 className="text-sm font-bold text-[#002147] mb-2">Expected Columns:</h4>
-                  <ul className="text-xs text-gray-600 space-y-1">
-                    <li className="flex items-center gap-2">
-                      <span className="w-2 h-2 bg-[#fe9800] rounded-full"></span>
-                      <strong>name</strong> - Book title (required)
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <span className="w-2 h-2 bg-gray-400 rounded-full"></span>
-                      <strong>author</strong> - Author name (optional)
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <span className="w-2 h-2 bg-[#fe9800] rounded-full"></span>
-                      <strong>department</strong> - Department (required)
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <span className="w-2 h-2 bg-gray-400 rounded-full"></span>
-                      <strong>edition</strong> - Edition (optional)
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <span className="w-2 h-2 bg-gray-400 rounded-full"></span>
-                      <strong>sr_no</strong> - Serial Number (optional)
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <span className="w-2 h-2 bg-gray-400 rounded-full"></span>
-                      <strong>status</strong> - Available/Allocated (optional, defaults to Available)
-                    </li>
-                  </ul>
-                </div>
-
-                {/* Preview Section */}
-                {importPreview.length > 0 && (
-                  <div>
-                    <h4 className="text-sm font-bold text-[#002147] mb-2">
-                      Preview ({importPreview.length} books)
-                    </h4>
-                    <div className="max-h-48 overflow-y-auto border-2 border-gray-200 rounded-lg">
-                      <table className="w-full text-xs">
-                        <thead className="bg-gray-50 sticky top-0">
-                          <tr>
-                            <th className="px-2 py-1 text-left font-bold text-[#002147]">Name</th>
-                            <th className="px-2 py-1 text-left font-bold text-[#002147]">Author</th>
-                            <th className="px-2 py-1 text-left font-bold text-[#002147]">Dept</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                          {importPreview.slice(0, 10).map((book, index) => (
-                            <tr key={index} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                              <td className="px-2 py-1 truncate max-w-[100px]">{book.name || '-'}</td>
-                              <td className="px-2 py-1 truncate max-w-[80px]">{book.author || '-'}</td>
-                              <td className="px-2 py-1 truncate max-w-[60px]">{book.department || '-'}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                      {importPreview.length > 10 && (
-                        <p className="text-xs text-center text-gray-500 py-2">
-                          ...and {importPreview.length - 10} more books
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Errors Section */}
-                {importErrors.length > 0 && (
-                  <div className="bg-red-50 rounded-lg p-4 border-2 border-red-300">
-                    <h4 className="text-sm font-bold text-red-700 mb-2 flex items-center gap-2">
-                      <XCircle className="w-4 h-4" />
-                      Validation Errors
-                    </h4>
-                    <div className="max-h-32 overflow-y-auto">
-                      {importErrors.map((error, index) => (
-                        <div key={index} className="text-xs text-red-600 mb-1">
-                          <strong>Row {error.row}:</strong> {error.errors.join(', ')}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Action Buttons */}
-                <div className="flex gap-3 pt-4 border-t-2 border-[#002147]">
-                  <button
-                    type="button"
-                    onClick={resetBulkImport}
-                    className="flex-1 px-4 py-3 border-2 border-[#002147] text-[#002147] rounded-lg hover:bg-gray-100 transition-all font-bold"
-                    disabled={importing}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleBulkImport}
-                    disabled={importing || importPreview.length === 0}
-                    className="flex-1 px-4 py-3 bg-[#fe9800] text-white rounded-lg hover:shadow-xl hover:scale-105 transition-all font-bold border-2 border-[#002147] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-                  >
-                    {importing ? (
-                      <span className="flex items-center justify-center gap-2">
-                        <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>
-                        Importing...
-                      </span>
-                    ) : (
-                      `Import ${importPreview.length} Books`
-                    )}
-                  </button>
-                </div>
+          <div className="space-y-3">
+            {/* File Upload Section */}
+            <div>
+              <label className={ui.label}>
+                Upload File (CSV or XLSX)
+              </label>
+              <div className="rounded-xl border border-dashed border-edge bg-surface/50 p-4 text-center transition-colors hover:border-brand-400 hover:bg-brand-500/5">
+                <input
+                  type="file"
+                  accept=".csv,.xlsx,.xls"
+                  onChange={handleFileChange}
+                  className="hidden"
+                  id="bulk-import-file"
+                />
+                <label htmlFor="bulk-import-file" className="block cursor-pointer">
+                  <span className="mx-auto mb-2 grid size-9 place-items-center rounded-xl bg-brand-500/10 text-brand-600">
+                    <Upload className="size-4" />
+                  </span>
+                  <p className="text-[13px] font-medium text-ink">
+                    {importFile ? importFile.name : 'Click to upload or drag and drop'}
+                  </p>
+                  <p className="mt-0.5 text-[11.5px] text-ink-muted">
+                    CSV, XLS, or XLSX files only
+                  </p>
+                </label>
               </div>
             </div>
+
+            {/* Expected Format */}
+            <div className="rounded-xl border border-glass-line bg-surface/50 p-3">
+              <h4 className="mb-1.5 text-[12px] font-semibold text-ink">Expected Columns:</h4>
+              <ul className="space-y-1 text-[11.5px] text-ink-soft">
+                <li className="flex items-center gap-2">
+                  <span className="size-1.5 rounded-full bg-brand-500"></span>
+                  <strong className="text-ink">name</strong> - Book title (required)
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="size-1.5 rounded-full bg-slate-400"></span>
+                  <strong className="text-ink">author</strong> - Author name (optional)
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="size-1.5 rounded-full bg-brand-500"></span>
+                  <strong className="text-ink">department</strong> - Department (required)
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="size-1.5 rounded-full bg-slate-400"></span>
+                  <strong className="text-ink">edition</strong> - Edition (optional)
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="size-1.5 rounded-full bg-slate-400"></span>
+                  <strong className="text-ink">sr_no</strong> - Serial Number (optional)
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="size-1.5 rounded-full bg-slate-400"></span>
+                  <strong className="text-ink">status</strong> - Available/Allocated (optional, defaults to Available)
+                </li>
+              </ul>
+            </div>
+
+            {/* Preview Section */}
+            {importPreview.length > 0 && (
+              <div>
+                <h4 className="mb-1.5 text-[12px] font-semibold text-ink">
+                  Preview ({importPreview.length} books)
+                </h4>
+                <div className="scroll-quiet max-h-48 overflow-y-auto rounded-xl border border-glass-line bg-surface/50">
+                  <table className="w-full text-[12px]">
+                    <thead className={ui.thead}>
+                      <tr>
+                        <th className={cn(ui.th, 'px-2.5 py-1.5')}>Name</th>
+                        <th className={cn(ui.th, 'px-2.5 py-1.5')}>Author</th>
+                        <th className={cn(ui.th, 'px-2.5 py-1.5')}>Dept</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {importPreview.slice(0, 10).map((book, index) => (
+                        <tr key={index} className="border-b border-glass-line last:border-0">
+                          <td className="max-w-[100px] truncate px-2.5 py-1.5 text-ink">{book.name || '-'}</td>
+                          <td className="max-w-[80px] truncate px-2.5 py-1.5 text-ink-soft">{book.author || '-'}</td>
+                          <td className="max-w-[60px] truncate px-2.5 py-1.5 text-ink-soft">{book.department || '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {importPreview.length > 10 && (
+                    <p className="py-1.5 text-center text-[11.5px] text-ink-muted">
+                      ...and {importPreview.length - 10} more books
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Errors Section */}
+            {importErrors.length > 0 && (
+              <div className="rounded-xl border border-rose-500/25 bg-rose-500/8 p-3">
+                <h4 className="mb-1.5 flex items-center gap-1.5 text-[12px] font-semibold text-rose-700">
+                  <XCircle className="size-4" />
+                  Validation Errors
+                </h4>
+                <div className="scroll-quiet max-h-32 overflow-y-auto">
+                  {importErrors.map((error, index) => (
+                    <div key={index} className="mb-1 text-[11.5px] text-rose-600">
+                      <strong>Row {error.row}:</strong> {error.errors.join(', ')}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-        </div>
+        </Modal>
       )}
 
-      {/* Bulk Delete Modal - Right Sidebar */}
+      {/* Bulk Delete Modal */}
       {showBulkDeleteModal && (
-        <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-end"
-          onClick={() => {
+        <Modal
+          onClose={() => {
             setShowBulkDeleteModal(false)
             setBulkDeleteDepartment('')
             setBulkDeleteCount(0)
           }}
+          title="Bulk Delete Books by Department"
+          icon={AlertTriangle}
+          size="sm"
+          footer={
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowBulkDeleteModal(false)
+                  setBulkDeleteDepartment('')
+                  setBulkDeleteCount(0)
+                }}
+                className={ui.btnSecondary}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!bulkDeleteDepartment) {
+                    toast.error('Please select a department')
+                    return
+                  }
+
+                  if (bulkDeleteCount === 0) {
+                    toast.error('No books to delete for the selected department')
+                    return
+                  }
+
+                  try {
+                    setDeletingBulk(true)
+                    const { error } = await supabase
+                      .from('books')
+                      .delete()
+                      .eq('department', bulkDeleteDepartment)
+
+                    if (error) throw error
+
+                    toast.success(`Deleted ${bulkDeleteCount} book(s) from ${bulkDeleteDepartment}`)
+                    setShowBulkDeleteModal(false)
+                    setBulkDeleteDepartment('')
+                    setBulkDeleteCount(0)
+                    fetchBooks()
+                  } catch (err) {
+                    console.error('Error deleting books in bulk:', err)
+                    toast.error('Failed to delete books')
+                  } finally {
+                    setDeletingBulk(false)
+                  }
+                }}
+                className={ui.btnDanger}
+                disabled={deletingBulk}
+              >
+                {deletingBulk ? 'Deleting...' : 'Delete Permanently'}
+              </button>
+            </>
+          }
         >
-          <div
-            className="bg-white h-full w-full max-w-md shadow-2xl border-l-2 border-[#fe9800] overflow-y-auto animate-slide-in-right"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="bg-[#002147] px-5 py-4 sticky top-0 z-10 border-b-2 border-[#fe9800]">
-              <h2 className="text-xl font-bold text-white font-serif flex items-center gap-2">
-                <AlertTriangle className="w-6 h-6" />
-                Bulk Delete Books by Department
-              </h2>
-            </div>
-            <div className="p-6">
-              <div className="space-y-5">
-                <div>
-                  <label className="block text-xs font-bold text-[#002147] mb-2 uppercase tracking-wide">
-                    Select Department to Delete
-                  </label>
-                  <select
-                    value={bulkDeleteDepartment}
-                    onChange={async (e) => {
-                      const dept = e.target.value
-                      setBulkDeleteDepartment(dept)
-                      // Fetch count
-                      if (dept) {
-                        try {
-                          const { count, error } = await supabase
-                            .from('books')
-                            .select('id', { count: 'exact', head: true })
-                            .eq('department', dept)
+          <div className="space-y-3">
+            <div>
+              <label className={ui.label}>
+                Select Department to Delete
+              </label>
+              <Select
+                variant="field"
+                label="Department to delete"
+                placeholder="Select a department"
+                value={bulkDeleteDepartment}
+                options={deptOptions}
+                searchPlaceholder="Search departments…"
+                onChange={async (dept) => {
+                  setBulkDeleteDepartment(dept)
+                  // Fetch count
+                  if (dept) {
+                    try {
+                      const { count, error } = await supabase
+                        .from('books')
+                        .select('id', { count: 'exact', head: true })
+                        .eq('department', dept)
 
-                          if (error) throw error
-                          setBulkDeleteCount(count || 0)
-                        } catch (err) {
-                          console.error('Error fetching department count:', err)
-                          toast.error('Failed to fetch books count for selected department')
-                          setBulkDeleteCount(0)
-                        }
-                      } else {
-                        setBulkDeleteCount(0)
-                      }
-                    }}
-                    className="w-full px-3 py-3 border-2 border-gray-200 rounded-lg bg-gray-50 text-gray-900 focus:ring-2 focus:ring-[#fe9800] focus:border-[#fe9800] outline-none transition-all font-medium"
-                  >
-                    <option value="">Select a department</option>
-                    {departments.map((dept) => (
-                      <option key={dept.id} value={dept.department_name}>
-                        {dept.department_name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="bg-gray-50 rounded-lg p-4 border-2 border-[#002147]">
-                  <p className="text-sm text-gray-700">
-                    {bulkDeleteDepartment
-                      ? `This will permanently delete ${bulkDeleteCount} book(s) in the "${bulkDeleteDepartment}" department.`
-                      : 'Select a department to see how many books will be deleted.'}
-                  </p>
-                </div>
-
-                <p className="text-sm text-gray-500 italic">
-                  This action cannot be undone. Only proceed if you are certain.
-                </p>
-
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowBulkDeleteModal(false)
-                      setBulkDeleteDepartment('')
+                      if (error) throw error
+                      setBulkDeleteCount(count || 0)
+                    } catch (err) {
+                      console.error('Error fetching department count:', err)
+                      toast.error('Failed to fetch books count for selected department')
                       setBulkDeleteCount(0)
-                    }}
-                    className="flex-1 px-4 py-3 border-2 border-[#002147] text-[#002147] rounded-lg hover:bg-gray-100 transition-all font-bold"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      if (!bulkDeleteDepartment) {
-                        toast.error('Please select a department')
-                        return
-                      }
-
-                      if (bulkDeleteCount === 0) {
-                        toast.error('No books to delete for the selected department')
-                        return
-                      }
-
-                      try {
-                        setDeletingBulk(true)
-                        const { error } = await supabase
-                          .from('books')
-                          .delete()
-                          .eq('department', bulkDeleteDepartment)
-
-                        if (error) throw error
-
-                        toast.success(`Deleted ${bulkDeleteCount} book(s) from ${bulkDeleteDepartment}`)
-                        setShowBulkDeleteModal(false)
-                        setBulkDeleteDepartment('')
-                        setBulkDeleteCount(0)
-                        fetchBooks()
-                      } catch (err) {
-                        console.error('Error deleting books in bulk:', err)
-                        toast.error('Failed to delete books')
-                      } finally {
-                        setDeletingBulk(false)
-                      }
-                    }}
-                    className="flex-1 px-4 py-3 bg-red-600 text-white rounded-lg hover:shadow-xl hover:scale-105 transition-all font-bold border-2 border-[#fe9800]"
-                    disabled={deletingBulk}
-                  >
-                    {deletingBulk ? 'Deleting...' : 'Delete Permanently'}
-                  </button>
-                </div>
-              </div>
+                    }
+                  } else {
+                    setBulkDeleteCount(0)
+                  }
+                }}
+              />
             </div>
+
+            <div className="rounded-xl border border-glass-line bg-surface/50 px-3 py-2.5">
+              <p className="text-[12.5px] text-ink-soft">
+                {bulkDeleteDepartment
+                  ? `This will permanently delete ${bulkDeleteCount} book(s) in the "${bulkDeleteDepartment}" department.`
+                  : 'Select a department to see how many books will be deleted.'}
+              </p>
+            </div>
+
+            <p className="flex items-start gap-1.5 rounded-xl bg-rose-500/8 px-3 py-2 text-[12px] text-rose-700">
+              <AlertTriangle className="mt-px size-3.5 shrink-0" />
+              This action cannot be undone. Only proceed if you are certain.
+            </p>
           </div>
-        </div>
+        </Modal>
       )}
 
-      {/* Allocation Modal - Right Sidebar */}
+      {/* Allocation Modal */}
       {showAllocationModal && bookToAllocate && (
-        <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-end"
-          onClick={() => {
+        <Modal
+          onClose={() => {
             setShowAllocationModal(false)
             setBookToAllocate(null)
             setReserverInfo({ reserver_name: '', reserver_id: '', reserver_role: 'student' })
           }}
+          title="Allocate Book"
+          icon={BookOpen}
+          size="md"
+          footer={
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAllocationModal(false)
+                  setBookToAllocate(null)
+                  setReserverInfo({ reserver_name: '', reserver_id: '', reserver_role: 'student' })
+                }}
+                className={ui.btnSecondary}
+                disabled={allocating}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                form="allocate-form"
+                disabled={allocating}
+                className={ui.btnPrimary}
+              >
+                {allocating ? 'Allocating...' : 'Allocate Book'}
+              </button>
+            </>
+          }
         >
-          <div
-            className="bg-white h-full w-full max-w-md shadow-2xl border-l-2 border-[#fe9800] overflow-y-auto animate-slide-in-right"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="bg-[#002147] px-5 py-4 sticky top-0 z-10 border-b-2 border-[#fe9800]">
-              <h2 className="text-xl font-bold text-white font-serif flex items-center gap-2">
-                <BookOpen className="w-6 h-6" />
-                Allocate Book
-              </h2>
-            </div>
-            <div className="p-6">
-              {/* Book Info */}
-              <div className="bg-gray-50 rounded-lg p-4 mb-6 border-2 border-[#002147]">
-                <h3 className="text-sm font-bold text-[#002147] mb-2">Book Details</h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between gap-3">
-                    <span className="text-gray-600 flex-shrink-0">Title:</span>
-                    <span className="font-medium text-[#002147] text-right">{bookToAllocate.name}</span>
-                  </div>
-                  <div className="flex justify-between gap-3">
-                    <span className="text-gray-600 flex-shrink-0">Author:</span>
-                    <span className="font-medium text-[#002147] text-right">{bookToAllocate.author || 'N/A'}</span>
-                  </div>
-                  <div className="flex justify-between gap-3">
-                    <span className="text-gray-600 flex-shrink-0">Sr No:</span>
-                    <span className="font-medium text-[#002147] text-right">{bookToAllocate.sr_no || 'N/A'}</span>
-                  </div>
-                  <div className="flex justify-between gap-3">
-                    <span className="text-gray-600 flex-shrink-0">Book ID:</span>
-                    <span className="font-medium text-[#002147] text-right">{bookToAllocate.book_id}</span>
-                  </div>
-                  <div className="flex justify-between gap-3">
-                    <span className="text-gray-600 flex-shrink-0">Department:</span>
-                    <span className="font-medium text-[#002147] text-right">{bookToAllocate.department || 'N/A'}</span>
-                  </div>
-                </div>
+          {/* Book Info */}
+          <div className="mb-3 rounded-xl border border-glass-line bg-surface/50 p-3">
+            <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-muted">Book Details</h3>
+            <div className="space-y-1 text-[12.5px]">
+              <div className="flex justify-between gap-3">
+                <span className="shrink-0 text-ink-muted">Title:</span>
+                <span className="text-right font-medium text-ink">{bookToAllocate.name}</span>
               </div>
-
-              <form onSubmit={handleAllocateBook} className="space-y-5">
-                <div>
-                  <label className="block text-xs font-bold text-[#002147] mb-2 uppercase tracking-wide">
-                    Reserver Name *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={reserverInfo.reserver_name}
-                    onChange={(e) => setReserverInfo({ ...reserverInfo, reserver_name: e.target.value })}
-                    className="w-full px-3 py-3 border-2 border-gray-200 rounded-lg bg-gray-50 text-gray-900 focus:ring-2 focus:ring-[#fe9800] focus:border-[#fe9800] outline-none transition-all font-medium"
-                    placeholder="Enter reserver's full name"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-[#002147] mb-2 uppercase tracking-wide">
-                    Reserver ID *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={reserverInfo.reserver_id}
-                    onChange={(e) => setReserverInfo({ ...reserverInfo, reserver_id: e.target.value })}
-                    className="w-full px-3 py-3 border-2 border-gray-200 rounded-lg bg-gray-50 text-gray-900 focus:ring-2 focus:ring-[#fe9800] focus:border-[#fe9800] outline-none transition-all font-medium"
-                    placeholder="Enter student/teacher ID"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-[#002147] mb-2 uppercase tracking-wide">
-                    Role *
-                  </label>
-                  <select
-                    required
-                    value={reserverInfo.reserver_role}
-                    onChange={(e) => setReserverInfo({ ...reserverInfo, reserver_role: e.target.value })}
-                    className="w-full px-3 py-3 border-2 border-gray-200 rounded-lg bg-gray-50 text-gray-900 focus:ring-2 focus:ring-[#fe9800] focus:border-[#fe9800] outline-none transition-all font-medium"
-                  >
-                    <option value="student">Student</option>
-                    <option value="teacher">Teacher</option>
-                  </select>
-                </div>
-
-                {/* Issue date / due date */}
-                <div className="bg-white border-2 border-[#fe9800] rounded-lg p-3">
-                  <p className="text-xs font-bold text-[#002147] uppercase tracking-wide mb-2">
-                    Loan Period
-                  </p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[10px] font-bold text-gray-600 uppercase mb-1">Issue Date *</label>
-                      <input
-                        type="date"
-                        required
-                        value={allocationDates.issue_date}
-                        onChange={(e) => setAllocationDates({ ...allocationDates, issue_date: e.target.value })}
-                        className="w-full px-2 py-2 border-2 border-gray-200 rounded-lg bg-gray-50 text-gray-900 text-sm focus:ring-2 focus:ring-[#fe9800] focus:border-[#fe9800] outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-gray-600 uppercase mb-1">Due Date *</label>
-                      <input
-                        type="date"
-                        required
-                        min={allocationDates.issue_date || undefined}
-                        value={allocationDates.due_date}
-                        onChange={(e) => setAllocationDates({ ...allocationDates, due_date: e.target.value })}
-                        className="w-full px-2 py-2 border-2 border-gray-200 rounded-lg bg-gray-50 text-gray-900 text-sm focus:ring-2 focus:ring-[#fe9800] focus:border-[#fe9800] outline-none"
-                      />
-                    </div>
-                  </div>
-                  <p className="text-[10px] text-gray-500 mt-2">
-                    Pick when the book is due back. Every day past it is fined{' '}
-                    <span className="font-bold text-[#002147]">{formatMoney(librarySettings.fine_per_day, librarySettings)}</span>.
-                  </p>
-                </div>
-
-                <div className="flex gap-3 pt-4 border-t-2 border-[#002147]">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowAllocationModal(false)
-                      setBookToAllocate(null)
-                      setReserverInfo({ reserver_name: '', reserver_id: '', reserver_role: 'student' })
-                    }}
-                    className="flex-1 px-4 py-3 border-2 border-[#002147] text-[#002147] rounded-lg hover:bg-gray-100 transition-all font-bold"
-                    disabled={allocating}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={allocating}
-                    className="flex-1 px-4 py-3 bg-[#fe9800] text-white rounded-lg hover:shadow-xl hover:scale-105 transition-all font-bold border-2 border-[#002147] disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {allocating ? 'Allocating...' : 'Allocate Book'}
-                  </button>
-                </div>
-              </form>
+              <div className="flex justify-between gap-3">
+                <span className="shrink-0 text-ink-muted">Author:</span>
+                <span className="text-right font-medium text-ink">{bookToAllocate.author || 'N/A'}</span>
+              </div>
+              <div className="flex justify-between gap-3">
+                <span className="shrink-0 text-ink-muted">Sr No:</span>
+                <span className="text-right font-medium tabular-nums text-ink">{bookToAllocate.sr_no || 'N/A'}</span>
+              </div>
+              <div className="flex justify-between gap-3">
+                <span className="shrink-0 text-ink-muted">Book ID:</span>
+                <span className="text-right font-medium tabular-nums text-ink">{bookToAllocate.book_id}</span>
+              </div>
+              <div className="flex justify-between gap-3">
+                <span className="shrink-0 text-ink-muted">Department:</span>
+                <span className="text-right font-medium text-ink">{bookToAllocate.department || 'N/A'}</span>
+              </div>
             </div>
           </div>
-        </div>
+
+          <form id="allocate-form" onSubmit={handleAllocateBook} className="space-y-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className={ui.label}>
+                  Reserver Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={reserverInfo.reserver_name}
+                  onChange={(e) => setReserverInfo({ ...reserverInfo, reserver_name: e.target.value })}
+                  className={ui.input}
+                  placeholder="Enter reserver's full name"
+                />
+              </div>
+
+              <div>
+                <label className={ui.label}>
+                  Reserver ID *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={reserverInfo.reserver_id}
+                  onChange={(e) => setReserverInfo({ ...reserverInfo, reserver_id: e.target.value })}
+                  className={ui.input}
+                  placeholder="Enter student/teacher ID"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className={ui.label}>
+                Role *
+              </label>
+              <Select
+                variant="field"
+                required
+                label="Role"
+                value={reserverInfo.reserver_role}
+                onChange={(v) => setReserverInfo({ ...reserverInfo, reserver_role: v })}
+                options={[['student', 'Student'], ['teacher', 'Teacher']]}
+              />
+            </div>
+
+            {/* Issue date / due date */}
+            <div className="rounded-xl border border-brand-500/25 bg-brand-500/5 p-3">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-brand-700">
+                Loan Period
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={ui.label}>Issue Date *</label>
+                  <input
+                    type="date"
+                    required
+                    value={allocationDates.issue_date}
+                    onChange={(e) => setAllocationDates({ ...allocationDates, issue_date: e.target.value })}
+                    className={ui.input}
+                  />
+                </div>
+                <div>
+                  <label className={ui.label}>Due Date *</label>
+                  <input
+                    type="date"
+                    required
+                    min={allocationDates.issue_date || undefined}
+                    value={allocationDates.due_date}
+                    onChange={(e) => setAllocationDates({ ...allocationDates, due_date: e.target.value })}
+                    className={ui.input}
+                  />
+                </div>
+              </div>
+              <p className="mt-2 text-[11px] text-ink-muted">
+                Pick when the book is due back. Every day past it is fined{' '}
+                <span className="font-semibold text-ink">{formatMoney(librarySettings.fine_per_day, librarySettings)}</span>.
+              </p>
+            </div>
+          </form>
+        </Modal>
       )}
     </div>
   )
